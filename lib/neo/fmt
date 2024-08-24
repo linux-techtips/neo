@@ -1,0 +1,15 @@
+#pragma once
+
+#include <format>
+#include <print>
+
+namespace neo::fmt {
+
+using std::format_to_n;
+using std::format_to;
+using std::formatter;
+
+using std::println;
+using std::print;
+
+}
