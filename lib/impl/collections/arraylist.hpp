@@ -1,0 +1,263 @@
+#pragma once
+
+#include <neo/mem>
+
+namespace neo {
+
+namespace {
+
+struct Config {
+  bool unmanaged = false;
+  bool chunked = false;
+};
+
+[[nodiscard]]
+constexpr auto grow_capacity(usize cap, usize min) -> usize {
+  while (true) if ((cap += cap / 2 + 8) >= min) return cap;
+}
+
+} // anon
+
+template <typename T, Config = {}>
+struct ArrayList {
+  mem::Allocator allocator; 
+  mem::Slice<T> mem;
+
+  usize size;
+
+  [[nodiscard]]
+  constexpr static auto init(mem::Allocator allocator) -> ArrayList {
+    return { allocator };
+  }
+
+  [[nodiscard]]
+  constexpr static auto with_capacity(mem::Allocator allocator, usize size) -> ArrayList {
+    return {
+      .allocator = allocator,
+      .mem = allocator.alloc<T>(size),
+    };
+  }
+
+  constexpr auto deinit(this auto&& self) -> void {
+    if (self.mem) [[likely]] {
+      self.allocator.dealloc(self.mem);
+    }
+  }
+
+  [[nodiscard]]
+  constexpr auto capacity(this auto&& self) -> usize {
+    return self.mem.size;
+  }
+
+  [[nodiscard]]
+  constexpr auto begin(this auto&& self) -> T* {
+    return self.mem.begin();
+  }
+ 
+  [[nodiscard]]
+  constexpr auto end(this auto&& self) -> T* {
+    return &self.mem[self.size];
+  }
+
+  constexpr auto resize(this auto&& self, usize capacity) -> mem::Slice<T> {
+    if (self.capacity() >= capacity) return self.mem;
+
+    const auto new_capacity = grow_capacity(self.capacity(), capacity);
+    auto& old_mem = self.mem;
+
+    if (auto new_mem = self.allocator.realloc(old_mem, new_capacity)) {
+      return new_mem;
+    
+    } else if (auto new_mem = self.allocator.template alloc<T>(new_capacity)) {
+      __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), self.size * sizeof(T));
+      self.allocator.dealloc(old_mem);
+
+      return (self.mem = new_mem);
+
+    } else return {};
+  } 
+
+  [[nodiscard]]
+  constexpr auto add_slot(this auto&& self) -> T* {
+    if (auto mem = self.resize(self.size + 1)) [[likely]] {
+      return &mem[self.size++];
+
+    } else return nullptr;
+  }
+
+  constexpr auto push(this auto&& self, T&& elem) -> T* {
+    if (auto* slot = self.add_slot()) [[likely]] {
+      return &(*slot = static_cast<T&&>(elem));
+
+    } else return nullptr;
+  }
+  
+  constexpr auto push(this auto&& self, const T& elem) -> T* {
+    if (auto* slot = self.add_slot()) [[likely]] {
+      return &(*slot = elem);
+    
+    } else return nullptr;
+  }
+};
+
+template <typename T>
+struct ArrayList<T, Config { .unmanaged = true }> {
+  mem::Slice<T> mem;
+
+  usize size;
+
+  [[nodiscard]]
+  constexpr static auto init() -> ArrayList {
+    return {};
+  }
+
+  [[nodiscard]]
+  constexpr static auto with_capacity(mem::Allocator& allocator, usize size) -> ArrayList {
+    return { allocator.alloc<T>(size) };
+  }
+
+  constexpr auto deinit(this auto&& self, mem::Allocator& allocator) -> void {
+    allocator.dealloc(self.mem); 
+  }
+
+  [[nodiscard]]
+  constexpr auto capacity(this auto&& self) -> usize {
+    return self.mem.size;
+  }
+
+  [[nodiscard]]
+  constexpr auto begin(this auto&& self) -> T* {
+    return self.mem.begin();
+  }
+
+  [[nodiscard]]
+  constexpr auto end(this auto&& self) -> T* {
+    return &self.mem.data[self.size];
+  }
+
+  constexpr auto resize(this auto&& self, mem::Allocator& allocator, usize capacity) -> mem::Slice<T> {
+    if (self.capacity() >= capacity) return self.mem;
+
+    const auto new_capacity = grow_capacity(self.capacity(), capacity);
+    auto& old_mem = self.mem;
+
+    if (auto new_mem = allocator.realloc(old_mem, new_capacity)) {
+      return new_mem;
+    
+    } else if (auto new_mem = allocator.template alloc<T>(new_capacity)) {
+      __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), self.size * sizeof(T));
+      allocator.dealloc(old_mem);
+
+      return (self.mem = new_mem);
+
+    } else return {};
+  } 
+
+  [[nodiscard]]
+  constexpr auto add_slot(this auto&& self, mem::Allocator& allocator) -> T* {
+    if (auto mem = self.resize(allocator, self.size + 1)) [[likely]] {
+      return &mem[self.size++];
+
+    } else return nullptr;
+  }
+
+  constexpr auto push(this auto&& self, mem::Allocator& allocator, T&& elem) -> T* {
+    if (auto* slot = self.add_slot(allocator)) [[likely]] {
+      return &(*slot = static_cast<T&&>(elem));
+
+    } else return nullptr;
+  }
+  
+  constexpr auto push(this auto&& self, mem::Allocator& allocator, const T& elem) -> T* {
+    if (auto* slot = self.add_slot(allocator)) [[likely]] {
+      return &(*slot = elem);
+    
+    } else return nullptr;
+  }
+};
+
+template <typename T>
+struct ArrayList<T, { .chunked = true }> {
+  mem::Arena arena;
+  
+  struct Iter {
+    mem::Arena::Chunk* chunk;
+    mem::Arena& arena;
+
+    usize index;
+
+    auto operator ++ (this auto&& self) -> decltype(auto) {
+      const auto adjusted_index = self.index + sizeof(T);
+
+      if (adjusted_index >= self.chunk->used) [[unlikely]] {
+        self.chunk = self.chunk->next;
+        self.index = 0;
+
+      } else self.index = adjusted_index;
+
+      return self;
+    }
+
+    auto operator == (this auto&& self, decltype(self) other) -> bool {
+      return (self.chunk == other.chunk) and (self.index == other.index);
+    }
+
+    auto operator * (this auto&& self) -> decltype(auto) {
+      return *__builtin_bit_cast(T*, &self.chunk->data()[self.index]);
+    }
+  };
+
+  [[nodiscard]]
+  constexpr static auto init(mem::Allocator allocator) -> ArrayList {
+    return { mem::Arena::init(allocator) };
+  }
+
+  [[nodiscard]]
+  constexpr static auto with_capacity(mem::Allocator allocator, usize size) -> ArrayList {
+    auto arena = mem::Arena::init(allocator);
+    (void*)arena.push_chunk(0, size * sizeof(T));
+
+    return { arena };
+  }
+
+  constexpr auto deinit(this auto&& self) -> void {
+    self.arena.deinit();
+  }
+
+  [[nodiscard]]
+  constexpr auto capacity(this auto&& self) -> usize {
+    return self.arena.capacity() / sizeof(T);
+  }
+
+  [[nodiscard]]
+  auto begin(this auto&& self) -> Iter {
+    return { self.arena.first_chunk(), self.arena };
+  }
+
+  [[nodiscard]]
+  auto end(this auto&& self) -> Iter {
+    return { nullptr, self.arena };
+  }
+
+  auto add_slot(this auto&& self) -> T* {
+    auto* data = mem::Arena::alloc(&self.arena, sizeof(T), alignof(T));
+
+    return __builtin_bit_cast(T*, data);
+  }
+
+  auto push(this auto&& self, const T& elem) -> T* {
+    if (auto* slot = self.add_slot()) [[likely]] {
+      return &(*slot = elem);
+    
+    } else return nullptr;
+  }
+
+  auto push(this auto&& self, T&& elem) -> T* {
+    if (auto* slot = self.add_slot()) [[likely]] {
+      return &(*slot = static_cast<T&&>(elem));
+    
+    } else return nullptr;
+  }
+};
+
+} // neo::collections

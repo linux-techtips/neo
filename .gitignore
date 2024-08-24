@@ -1,0 +1,43 @@
+# Neo
+neo
+
+# Compile Commands
+compile_commands.json
+
+# Direnv
+.direnv/
+
+# Cache
+.cache/
+
+# Result
+result
+
+# Backup Files
+*.bak
+
+# Pre-compiled Headers
+*.gch
+*.pch
+
+# Object Files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Dynamic Libraries
+*.so
+*.dylib
+*.dll
+
+# Static Libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
