@@ -32,8 +32,7 @@ auto main(int argc, char** argv) -> int {
     fmt::println("Identifier Count: {}", buffer.ident_count);
 
   } else {
-    fmt::println("[ERROR] Could not open file: \"{}\"", path);
-
+    fmt::println(stderr, "[ERROR] Could not open file: \"{}\"", path);
     return 1;
   }
 }
