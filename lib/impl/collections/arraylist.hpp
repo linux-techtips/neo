@@ -1,5 +1,6 @@
 #pragma once
 
+#include <impl/collections/perchance.hpp>
 #include <neo/mem>
 
 namespace neo {
@@ -23,7 +24,7 @@ struct ArrayList {
   mem::Allocator allocator; 
   mem::Slice<T> mem;
 
-  usize size;
+  usize len;
 
   [[nodiscard]]
   constexpr static auto init(mem::Allocator allocator) -> ArrayList {
@@ -31,10 +32,10 @@ struct ArrayList {
   }
 
   [[nodiscard]]
-  constexpr static auto with_capacity(mem::Allocator allocator, usize size) -> ArrayList {
+  constexpr static auto with_capacity(mem::Allocator allocator, usize capacity) -> ArrayList {
     return {
       .allocator = allocator,
-      .mem = allocator.alloc<T>(size),
+      .mem = allocator.alloc<T>(capacity),
     };
   }
 
@@ -45,8 +46,23 @@ struct ArrayList {
   }
 
   [[nodiscard]]
+  constexpr auto data(this auto&& self) -> T* {
+    return self.mem.data();
+  }
+
+  [[nodiscard]]
+  constexpr auto size(this auto&& self) -> usize {
+    return self.len;
+  }
+
+  [[nodiscard]]
   constexpr auto capacity(this auto&& self) -> usize {
-    return self.mem.size;
+    return self.mem.size();
+  }
+
+  [[nodiscard]]
+  constexpr auto is_empty(this auto&& self) -> bool {
+    return self.size() == 0;
   }
 
   [[nodiscard]]
@@ -56,11 +72,21 @@ struct ArrayList {
  
   [[nodiscard]]
   constexpr auto end(this auto&& self) -> T* {
-    return &self.mem[self.size];
+    return &self.mem[self.len];
+  }
+
+  [[nodiscard]]
+  constexpr auto front(this auto&& self) -> decltype(auto) {
+    return *self.begin();
+  }
+
+  [[nodiscard]]
+  constexpr auto back(this auto&& self) -> decltype(auto) {
+    return *self.end();
   }
 
   constexpr auto resize(this auto&& self, usize capacity) -> mem::Slice<T> {
-    if (self.capacity() >= capacity) return self.mem;
+    if (self.capacity() >= capacity) [[likely]] return self.mem;
 
     const auto new_capacity = grow_capacity(self.capacity(), capacity);
     auto& old_mem = self.mem;
@@ -69,18 +95,19 @@ struct ArrayList {
       return new_mem;
     
     } else if (auto new_mem = self.allocator.template alloc<T>(new_capacity)) {
-      __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), self.size * sizeof(T));
-      self.allocator.dealloc(old_mem);
+      if (old_mem) [[likely]] {
+        __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), old_mem.byte_size()); 
+        self.allocator.dealloc(old_mem);
+      }
 
       return (self.mem = new_mem);
-
     } else return {};
   } 
 
   [[nodiscard]]
   constexpr auto add_slot(this auto&& self) -> T* {
-    if (auto mem = self.resize(self.size + 1)) [[likely]] {
-      return &mem[self.size++];
+    if (auto mem = self.resize(self.len + 1)) [[likely]] {
+      return &mem[self.len++];
 
     } else return nullptr;
   }
@@ -98,13 +125,25 @@ struct ArrayList {
     
     } else return nullptr;
   }
+
+  [[nodiscard]]
+  constexpr auto pop(this auto&& self) -> Perchance<T> {
+    if (self.len) [[likely]] {
+      return self.mem[--self.len];
+
+    } else return Null;
+  }
+
+  constexpr auto at_unchecked(this auto&& self, usize index) -> decltype(auto) {
+    return self.mem[index];
+  }
 };
 
 template <typename T>
 struct ArrayList<T, Config { .unmanaged = true }> {
   mem::Slice<T> mem;
 
-  usize size;
+  usize len;
 
   [[nodiscard]]
   constexpr static auto init() -> ArrayList {
@@ -112,17 +151,32 @@ struct ArrayList<T, Config { .unmanaged = true }> {
   }
 
   [[nodiscard]]
-  constexpr static auto with_capacity(mem::Allocator& allocator, usize size) -> ArrayList {
-    return { allocator.alloc<T>(size) };
+  constexpr static auto with_capacity(mem::Allocator allocator, usize capacity) -> ArrayList {
+    return { allocator.alloc<T>(capacity) };
   }
 
-  constexpr auto deinit(this auto&& self, mem::Allocator& allocator) -> void {
+  constexpr auto deinit(this auto&& self, mem::Allocator allocator) -> void {
     allocator.dealloc(self.mem); 
   }
 
   [[nodiscard]]
+  constexpr auto data(this auto&& self) -> T* {
+    return self.mem.data();
+  }
+
+  [[nodiscard]]
+  constexpr auto size(this auto&& self) -> usize {
+    return self.len;
+  }
+
+  [[nodiscard]]
   constexpr auto capacity(this auto&& self) -> usize {
-    return self.mem.size;
+    return self.mem.size();
+  }
+
+  [[nodiscard]]
+  constexpr auto is_empty(this auto&& self) -> bool {
+    return self.size() == 0;
   }
 
   [[nodiscard]]
@@ -132,10 +186,20 @@ struct ArrayList<T, Config { .unmanaged = true }> {
 
   [[nodiscard]]
   constexpr auto end(this auto&& self) -> T* {
-    return &self.mem.data[self.size];
+    return &self.mem.data[self.len];
   }
 
-  constexpr auto resize(this auto&& self, mem::Allocator& allocator, usize capacity) -> mem::Slice<T> {
+  [[nodiscard]]
+  constexpr auto front(this auto&& self) -> decltype(auto) {
+    return *self.begin();
+  }
+
+  [[nodiscard]]
+  constexpr auto back(this auto&& self) -> decltype(auto) {
+    return *self.end();
+  }
+
+  constexpr auto resize(this auto&& self, mem::Allocator allocator, usize capacity) -> mem::Slice<T> {
     if (self.capacity() >= capacity) return self.mem;
 
     const auto new_capacity = grow_capacity(self.capacity(), capacity);
@@ -145,8 +209,10 @@ struct ArrayList<T, Config { .unmanaged = true }> {
       return new_mem;
     
     } else if (auto new_mem = allocator.template alloc<T>(new_capacity)) {
-      __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), self.size * sizeof(T));
-      allocator.dealloc(old_mem);
+      if (old_mem) [[likely]] {
+        __builtin_memcpy(new_mem.bytes(), old_mem.bytes(), self.size * sizeof(T));
+        allocator.dealloc(old_mem);
+      }
 
       return (self.mem = new_mem);
 
@@ -154,25 +220,37 @@ struct ArrayList<T, Config { .unmanaged = true }> {
   } 
 
   [[nodiscard]]
-  constexpr auto add_slot(this auto&& self, mem::Allocator& allocator) -> T* {
-    if (auto mem = self.resize(allocator, self.size + 1)) [[likely]] {
-      return &mem[self.size++];
+  constexpr auto add_slot(this auto&& self, mem::Allocator allocator) -> T* {
+    if (auto mem = self.resize(allocator, self.len + 1)) [[likely]] {
+      return &mem[self.len++];
 
     } else return nullptr;
   }
 
-  constexpr auto push(this auto&& self, mem::Allocator& allocator, T&& elem) -> T* {
+  constexpr auto push(this auto&& self, mem::Allocator allocator, T&& elem) -> T* {
     if (auto* slot = self.add_slot(allocator)) [[likely]] {
       return &(*slot = static_cast<T&&>(elem));
 
     } else return nullptr;
   }
   
-  constexpr auto push(this auto&& self, mem::Allocator& allocator, const T& elem) -> T* {
+  constexpr auto push(this auto&& self, mem::Allocator allocator, const T& elem) -> T* {
     if (auto* slot = self.add_slot(allocator)) [[likely]] {
       return &(*slot = elem);
     
     } else return nullptr;
+  }
+
+  [[nodiscard]]
+  constexpr auto pop(this auto&& self) -> Perchance<T> {
+    if (self.len) [[likely]] {
+      return self.mem[--self.len];
+
+    } else return Null;
+  }
+
+  constexpr auto at_unchecked(this auto&& self, usize index) -> decltype(auto) {
+    return *self.mem[index];
   }
 };
 

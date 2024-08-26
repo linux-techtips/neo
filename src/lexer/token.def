@@ -1,0 +1,132 @@
+#ifndef TOKEN
+#define TOKEN(Name)
+#endif
+
+#ifndef TOKEN_SYMBOL
+#define TOKEN_SYMBOL(Name, Text) \
+  TOKEN(Name)
+#endif
+
+#ifndef TOKEN_KEYWORD
+#define TOKEN_KEYWORD(Name, Text) \
+  TOKEN(Name)
+#endif
+
+#ifndef TOKEN_GROUPING
+#define TOKEN_GROUPING(Name, Match, Text) \
+  TOKEN(Name)
+#endif
+
+#ifndef TOKEN_GROUPING_OPEN
+#define TOKEN_GROUPING_OPEN(Name, Close, Text) \
+  TOKEN_GROUPING(Name, Close, Text)
+#endif
+
+#ifndef TOKEN_GROUPING_CLOSE
+#define TOKEN_GROUPING_CLOSE(Name, Open, Text) \
+  TOKEN_GROUPING(Name, Open, Text)
+#endif
+
+
+TOKEN(Ident)
+
+TOKEN(NumberLiteral)
+TOKEN(StringLiteral)
+
+
+TOKEN_SYMBOL(Colon, ":")
+TOKEN_SYMBOL(Equal, "=")
+
+TOKEN_SYMBOL(Amp, "&")
+TOKEN_SYMBOL(Bar, "|")
+TOKEN_SYMBOL(Caret, "^")
+TOKEN_SYMBOL(Tilde, "~")
+
+TOKEN_SYMBOL(Plus, "+")
+TOKEN_SYMBOL(Dash, "-")
+TOKEN_SYMBOL(Star, "*")
+TOKEN_SYMBOL(Slash, "/")
+TOKEN_SYMBOL(Percent, "%")
+
+TOKEN_SYMBOL(Dot, ".")
+TOKEN_SYMBOL(Comma, ",")
+TOKEN_SYMBOL(Qustion, "?")
+TOKEN_SYMBOL(Exclaim, "!")
+TOKEN_SYMBOL(Octothorp, "#")
+
+TOKEN_SYMBOL(LessThan, "<")
+TOKEN_SYMBOL(GreaterThan, ">")
+
+TOKEN_SYMBOL(BarEqual, "|=")
+TOKEN_SYMBOL(AmpEqual, "&=")
+TOKEN_SYMBOL(PlusEqual, "+=")
+TOKEN_SYMBOL(DashEqual, "-=")
+TOKEN_SYMBOL(StarEqual, "*=")
+TOKEN_SYMBOL(SlashEqual, "/=")
+TOKEN_SYMBOL(CaretEqual, "^=")
+TOKEN_SYMBOL(TildeEqual, "~=")
+TOKEN_SYMBOL(PercentEqual, "%=")
+
+TOKEN_SYMBOL(EqualEqual, "==")
+TOKEN_SYMBOL(ExclaimEqual, "!=")
+TOKEN_SYMBOL(LessThanEqual, "<=")
+TOKEN_SYMBOL(GreaterThanEqual, ">=")
+
+TOKEN_SYMBOL(BarGreaterThan, "|>")
+TOKEN_SYMBOL(DashGreaterThan, "->")
+TOKEN_SYMBOL(EqualGreaterThan, "=>")
+
+TOKEN_SYMBOL(CaretCaret, "^^")
+TOKEN_SYMBOL(PercentPercent, "%%")
+TOKEN_SYMBOL(LessThanLessThan, "<<")
+TOKEN_SYMBOL(GreaterThanGreaterThan, ">>")
+
+TOKEN_SYMBOL(LessThanLessThanEqual, "<<=")
+TOKEN_SYMBOL(GreaterThanGreaterThanEqual, ">>=")
+
+
+TOKEN_KEYWORD(Comptime, "comptime")
+TOKEN_KEYWORD(Extern, "extern")
+TOKEN_KEYWORD(Inline, "inline")
+TOKEN_KEYWORD(Opaque, "opaque")
+TOKEN_KEYWORD(Packed, "packed")
+TOKEN_KEYWORD(Struct, "struct")
+TOKEN_KEYWORD(Const, "const")
+TOKEN_KEYWORD(Defer, "defer")
+TOKEN_KEYWORD(Error, "error")
+TOKEN_KEYWORD(Match, "match")
+TOKEN_KEYWORD(Union, "union")
+TOKEN_KEYWORD(Else, "else")
+TOKEN_KEYWORD(Loop, "loop")
+TOKEN_KEYWORD(Next, "next")
+TOKEN_KEYWORD(Stop, "stop")
+TOKEN_KEYWORD(Type, "type")
+TOKEN_KEYWORD(Yeet, "yeet")
+TOKEN_KEYWORD(And, "and")
+TOKEN_KEYWORD(Any, "any")
+TOKEN_KEYWORD(Not, "not")
+TOKEN_KEYWORD(Pub, "pub")
+TOKEN_KEYWORD(Use, "use")
+TOKEN_KEYWORD(As, "as")
+TOKEN_KEYWORD(Fn, "fn")
+TOKEN_KEYWORD(If, "if")
+TOKEN_KEYWORD(Or, "or")
+TOKEN_KEYWORD(Ignore, "_")
+
+
+TOKEN_GROUPING_OPEN(OpenBrace, CloseBrace, "[")
+TOKEN_GROUPING_OPEN(OpenCurly, CloseCurly, "{")
+TOKEN_GROUPING_OPEN(OpenParen, CloseParen, "(")
+
+
+TOKEN_GROUPING_CLOSE(CloseBrace, OpenBrace, "]")
+TOKEN_GROUPING_CLOSE(CloseCurly, OpenCurly, "}")
+TOKEN_GROUPING_CLOSE(CloseParen, OpenParen, ")")
+
+
+#undef TOKEN
+#undef TOKEN_SYMBOL
+#undef TOKEN_KEYWORD
+#undef TOKEN_GROUPING
+#undef TOKEN_GROUPING_OPEN
+#undef TOKEN_GROUPING_CLOSE

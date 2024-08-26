@@ -18,26 +18,31 @@ struct Allocator {
   
   } vtable;
 
+  [[nodiscard]]
+  constexpr auto is_initialized(this auto&& self) -> bool {
+    return self.vtable.realloc and self.vtable.dealloc and self.vtable.alloc;
+  }
+
   template <typename T>
   [[nodiscard]]
   constexpr auto realloc(this auto&& self, Slice<T> slice, usize size) -> Slice<T> {
+    if (__builtin_is_constant_evaluated()) return {};
+
     auto* data = self.raw_realloc(
       slice.bytes(),
-      sizeof(T) * slice.size,
+      sizeof(T) * slice.size(),
       sizeof(T) * size,
       alignof(T));
 
-    return Slice<T>::from_bytes(data, size);
+    return { reinterpret_cast<T*>(data), size };
   }
   
   template <typename T>
   constexpr auto dealloc(this auto&& self, Slice<T> slice) -> void {
     if (__builtin_is_constant_evaluated()) {
-      delete [] slice.data;
+      delete [] slice.ptr;
 
-    } else {
-      self.raw_dealloc(slice.bytes(), slice.size * sizeof(T));
-    }
+    } else self.raw_dealloc(slice.bytes(), slice.size());
   }
 
   template <typename T>
@@ -46,22 +51,24 @@ struct Allocator {
     if (__builtin_is_constant_evaluated()) {
       return Slice { new T [size], size };
 
-    } else {
-      return Slice<T>::from_bytes(self.raw_alloc(size * sizeof(T), alignof(T)), size); 
-    }
+    } else return { reinterpret_cast<T*>(self.raw_alloc(size * sizeof(T), alignof(T))), size }; 
   }
 
   [[nodiscard]]
   constexpr auto raw_realloc(this auto&& self, u8* data, usize old_size, usize new_size, u8 align) -> u8* {
+    assert_neq(reinterpret_cast<usize>(self.vtable.realloc), 0, "Realloc is not initialized when called");
+
     return self.vtable.realloc(self.impl, data, old_size, new_size, align);  
   }
 
   constexpr auto raw_dealloc(this auto&& self, u8* data, usize size) -> void {
+    assert_neq(reinterpret_cast<usize>(self.vtable.dealloc), 0, "Dealloc is not initialized when called");
     self.vtable.dealloc(self.impl, data, size);
   }
 
   [[nodiscard]]
   constexpr auto raw_alloc(this auto&& self, usize size, u8 align) -> u8* {
+    assert_neq(reinterpret_cast<usize>(self.vtable.alloc), 0, "Alloc is not initialized when called");
     return self.vtable.alloc(self.impl, size, align);
   }
 };

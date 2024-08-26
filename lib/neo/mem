@@ -1,5 +1,6 @@
 #pragma once
 
+#include <impl/mem/allocators/logging.hpp>
 #include <impl/mem/allocators/arena.hpp>
 #include <impl/mem/allocators/page.hpp>
 #include <impl/mem/allocators/c.hpp>

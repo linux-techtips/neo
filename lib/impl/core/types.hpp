@@ -5,10 +5,10 @@
 #endif
 
 using u128 = __uint128_t;
-using u64 = unsigned long;
-using u32 = unsigned int;
-using u16 = unsigned short;
-using u8 = unsigned char;
+using u64 = __UINT64_TYPE__;
+using u32 = __UINT32_TYPE__;
+using u16 = __UINT16_TYPE__;
+using u8 = __UINT8_TYPE__;
 
 static_assert(sizeof(u128) == 16);
 static_assert(sizeof(u64) == 8);
@@ -17,10 +17,10 @@ static_assert(sizeof(u16) == 2);
 static_assert(sizeof(u8) == 1);
 
 using s128 = __int128_t;
-using s64 = long;
-using s32 = int;
-using s16 = short;
-using s8 = char;
+using s64 = __INT64_TYPE__;
+using s32 = __INT32_TYPE__;
+using s16 = __INT16_TYPE__;
+using s8 = __INT8_TYPE__;
 
 static_assert(sizeof(s128) == 16);
 static_assert(sizeof(s64) == 8);

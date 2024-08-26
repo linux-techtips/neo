@@ -17,7 +17,6 @@
 
           packages = buildInputs;
 
-          # INCLUDE_PATH = "${gcc14Stdenv.cc.cc}/include/c++/14.1.0/";
           LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath [ gcc14Stdenv.cc.cc.lib ];
         };
 
@@ -33,15 +32,40 @@
           nativeBuildInputs = buildInputs ++ [ gcc14.libc.static ];
 
           buildPhase = ''
-            make release
+            mkdir -p build
+            make nix 
           '';
         
           installPhase = ''
             mkdir -p $out/bin
-            cp neo $out/bin
+            cp build/neo $out/bin
           '';
         
           doCheck = true;
+      };
+  
+      packages.profile = stdenv.mkDerivation {
+        name = "neo";
+        
+        src = lib.sourceByRegex ./. [
+          "Makefile"
+          "^src.*"
+          "^lib.*"
+        ];
+          
+        nativeBuildInputs = buildInputs ++ [ gcc14.libc.static ];
+
+        buildPhase = ''
+          mkdir -p build
+          make profile 
+        '';
+
+        installPhase = ''
+          mkdir -p $out/bin
+          cp build/neo $out/bin  
+        '';
+        
+        doCheck = false;
       };
     });
 }

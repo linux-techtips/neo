@@ -1,4 +1,5 @@
 #pragma once
 
 #include <impl/collections/arraylist.hpp>
+#include <impl/collections/array.hpp>
 #include <impl/collections/string.hpp>

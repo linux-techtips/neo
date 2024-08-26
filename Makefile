@@ -4,21 +4,23 @@ LIB := ./lib
 BUILD := ./build
 TARGET := neo
 FLAGS := -std=c++23 -I$(LIB) -I$(SRC) -mavx2 -mbmi2 -Wall -Werror -Wpedantic -Wconversion -fuse-ld=mold -fno-rtti -fno-exceptions
-RFLAGS := -Ofast -s -flto=auto -march=native -mtune=native -DNDEBUG -DFAST
+RFLAGS := -Ofast -s -static -flto=auto -DNDEBUG -DFAST
 DFLAGS := -g -ggdb3 -Og -fno-omit-frame-pointer
 
-profile: FLAGS += $(RFLAGS) -I/usr/include/Tracy /usr/lib/libTracyClient.a -DTRACY_ENABLE=1
-profile: $(TARGET)
+nix: FLAGS += $(RFLAGS) -DUNITY
+nix: $(BUILD)/$(TARGET)
 
-release: FLAGS += $(RFLAGS) 
-release: $(TARGET)
+profile: FLAGS += $(RFLAGS) -march=native -mtune=native 
+profile: $(BUILD)/$(TARGET)
 
 debug: FLAGS += $(DFLAGS) -fsanitize=address,undefined -DDEBUG
-debug: $(TARGET)
+debug: $(BUILD)/$(TARGET)
 
-$(TARGET): $(SRC)/$(TARGET).cpp
-	mkdir -p $(BUILD)
-	$(CC) $(FLAGS) $< -o $(BUILD)/$@
+$(BUILD)/lex.o: $(SRC)/lexer/lex.cpp
+	$(CC) $(FLAGS) -c $< -o $@
+
+$(BUILD)/$(TARGET): $(SRC)/$(TARGET).cpp $(BUILD)/lex.o
+	$(CC) $(FLAGS) $(BUILD)/lex.o $< -o $@
 
 run: debug
-	./$(BUILD)/$(TARGET) $(*)
+	$(BUILD)/$(TARGET) $(*)

@@ -1,4 +1,8 @@
-./build/*
+# Neo executable
+build/neo
+
+# Build Directory
+# build/
 
 # Compile Commands
 compile_commands.json

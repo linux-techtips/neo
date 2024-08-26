@@ -28,7 +28,7 @@ struct neo::fmt::formatter<std::source_location::__impl> {
 
 namespace neo::debug {
 
-inline auto assert(
+constexpr auto assert(
   const bool cond,
   const char* cond_text,
   const char* why,
@@ -38,8 +38,10 @@ inline auto assert(
   const auto& rvalue,
   const std::source_location::__impl* source = __builtin_source_location()
 ) -> void {
-  if (cond) [[likely]] return;
+  // TODO: Figure out how to do comptime assertions. Yes I know about static_assert, you arewelcome to try.
+  if (__builtin_is_constant_evaluated()) return;
 
+  if (cond) [[likely]] return;
 
   fmt::println(stderr,
     "[ASSERT] {} - Expected {} to be {} {}\n"
