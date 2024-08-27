@@ -1,5 +1,5 @@
 #pragma once
 
-#include <impl/collections/arraylist.hpp>
-#include <impl/collections/array.hpp>
-#include <impl/collections/string.hpp>
+#include <neo/impl/collections/arraylist.hpp>
+#include <neo/impl/collections/array.hpp>
+#include <neo/impl/collections/string.hpp>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <impl/core/types.hpp>
+#include <neo/impl/core/types.hpp>
 #include <neo/debug>
 
 namespace neo::mem {

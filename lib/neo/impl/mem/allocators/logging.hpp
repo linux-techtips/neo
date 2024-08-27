@@ -1,6 +1,6 @@
 #pragma once
 
-#include <impl/mem/allocator.hpp>
+#include <neo/impl/mem/allocator.hpp>
 
 namespace neo::mem {
 

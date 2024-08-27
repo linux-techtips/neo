@@ -1,7 +1,7 @@
 #pragma once
 
-#include <impl/mem/allocator.hpp>
-#include <impl/mem/align.hpp>
+#include <neo/impl/mem/allocator.hpp>
+#include <neo/impl/mem/align.hpp>
 
 namespace {
 
@@ -25,16 +25,16 @@ constexpr static auto c_allocator = Allocator {
     .alloc = [] (void*, usize size, u8 log2_align) -> u8* {
       const auto align = 1ull << log2_align;
 
-      auto* data = __builtin_bit_cast(usize*, malloc(size + align - 1 + sizeof(u8*)));
+      auto* data = reinterpret_cast<usize*>(malloc(size + align - 1 + sizeof(u8*)));
 
       auto unaligned_addr = __builtin_bit_cast(usize, data);
       auto aligned_addr = align_forward(unaligned_addr + sizeof(u8*), align);
 
-      auto aligned_ptr = __builtin_bit_cast(usize**, unaligned_addr + (aligned_addr - unaligned_addr));
+      auto aligned_ptr = reinterpret_cast<usize**>(unaligned_addr + (aligned_addr - unaligned_addr));
 
       aligned_ptr[-1] = data;
 
-      return __builtin_bit_cast(u8*, aligned_ptr);
+      return reinterpret_cast<u8*>(aligned_ptr);
     }
   },
 };

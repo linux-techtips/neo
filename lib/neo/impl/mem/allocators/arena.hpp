@@ -1,7 +1,7 @@
 #pragma once
 
-#include <impl/mem/allocator.hpp>
-#include <impl/mem/align.hpp>
+#include <neo/impl/mem/allocator.hpp>
+#include <neo/impl/mem/align.hpp>
 
 namespace neo::mem {
 

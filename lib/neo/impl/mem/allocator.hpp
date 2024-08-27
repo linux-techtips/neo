@@ -1,6 +1,6 @@
 #pragma once
 
-#include <impl/mem/slice.hpp>
+#include <neo/impl/mem/slice.hpp>
 
 namespace neo::mem {
 
