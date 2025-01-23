@@ -24,7 +24,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
-    neo_compiler_exe.linkLibrary(neo_lib_artifact);
+    if (!std.mem.eql(u8, mode, "wasm")) neo_compiler_exe.linkLibrary(neo_lib_artifact);
 
     neo_compiler_exe.step.dependOn(&neo_lib_install.step);
     b.installArtifact(neo_compiler_exe);

@@ -49,7 +49,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = root_path,
             .optimize = optimize_wasm,
             .target = target_wasm,
-            .name = "libneo",
+            .name = "neo",
         }),
     };
 

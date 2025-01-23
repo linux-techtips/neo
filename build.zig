@@ -16,7 +16,7 @@ pub fn build(b: *std.Build) void {
         .mode = mode,
     });
 
-    const neo_lib_artifact = neo_lib_dep.artifact(if (std.mem.eql(u8, mode, "wasm")) "libneo" else "neo");
+    const neo_lib_artifact = neo_lib_dep.artifact("neo");
     const neo_lib_install = b.addInstallArtifact(neo_lib_artifact, .{
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });

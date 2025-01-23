@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
         .mode = @as([]const u8, "wasm"),
     });
 
-    const neo_lib_artifact = neo_lib_dep.artifact("libneo");
+    const neo_lib_artifact = neo_lib_dep.artifact("neo");
     const neo_lib_install = b.addInstallArtifact(neo_lib_artifact, .{
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
@@ -28,9 +28,9 @@ pub fn build(b: *std.Build) void {
     });
 
     neo_explorer_exe.step.dependOn(&neo_lib_install.step);
-    neo_explorer_exe.root_module.addAnonymousImport("libneo", .{
+    neo_explorer_exe.root_module.addAnonymousImport("neo", .{
         // TODO: Factor out hardcoed path.
-        .root_source_file = b.path("zig-out/lib/libneo.wasm"),
+        .root_source_file = b.path("zig-out/lib/neo.wasm"),
     });
 
     b.installArtifact(neo_explorer_exe);
