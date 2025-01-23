@@ -1,0 +1,20 @@
+.{
+    .name = "neo",
+    .version = "0.0.0",
+    .dependencies = .{
+        .@"neo-compiler" = .{
+            .path = "neo-compiler",
+        },
+        .@"neo-explorer" = .{
+            .path = "neo-explorer",
+        },
+        .@"neo-lib" = .{
+            .path = "neo-lib",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "README.md",
+    },
+}
