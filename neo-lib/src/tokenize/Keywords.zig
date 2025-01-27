@@ -159,10 +159,5 @@ pub fn lookup(text: []const u8) ?Token.Tag {
     const text_int = std.mem.readInt(u64, text.ptr[0..8], .little);
     const kw_int = std.mem.readInt(u64, kw.ptr[0..8], .little);
 
-    std.debug.print("LOOKUP: \n", .{});
-    std.debug.print("  {b:0>64}\n", .{@bitReverse(text_int)});
-    std.debug.print("  {b:0>64}\n", .{@bitReverse(mask)});
-    std.debug.print("  {b:0>64}\n\n", .{@bitReverse(kw_int)});
-
     return if (text_int & mask == kw_int) indexToTag(index) else null;
 }
