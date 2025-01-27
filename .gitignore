@@ -2,3 +2,6 @@
 zig-out/
 
 .obsidian/
+
+.direnv/
+result/

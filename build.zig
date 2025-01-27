@@ -21,7 +21,7 @@ pub fn build(b: *std.Build) void {
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
 
-    const neo_lib_step = b.step("libneo", "Build libneo");
+    const neo_lib_step = b.step("neo-lib", "Build libneo");
     neo_lib_step.dependOn(&neo_lib_install.step);
 
     const neo_explorer_dep = b.dependency("neo-explorer", .{

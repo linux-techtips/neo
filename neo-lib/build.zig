@@ -64,6 +64,10 @@ pub fn build(b: *std.Build) void {
         neo_lib.max_memory = std.wasm.page_size * wasm_pages_max;
     }
 
+    if (mode == .shared) {
+        neo_lib.rdynamic = true;
+    }
+
     const neo_install = b.addInstallArtifact(neo_lib, .{
         .dest_dir = .{ .override = .{ .custom = "lib" } },
     });
