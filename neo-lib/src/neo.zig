@@ -1,25 +1,9 @@
+const tokenize = @import("tokenize.zig");
 const std = @import("std");
 
-const Token = extern struct {
-    tag: Tag,
-    len: u8,
-
-    const Tag = enum(u8) {
-        invalid = 0,
-        whitespace,
-        ident,
-    };
-};
-
-const Source = extern struct {
-    ptr: [*:0]const u8,
-    len: usize,
-};
-
-const Tokens = extern struct {
-    ptr: [*c]Token,
-    len: usize,
-};
+const Keywords = tokenize.Keywords;
+const Source = tokenize.Source;
+const Token = tokenize.Token;
 
 const State = enum {
     whitespace,
@@ -28,7 +12,7 @@ const State = enum {
 };
 
 const Tokenizer = struct {
-    source: [:0]const u8,
+    source: Source,
     tokens: []Token = undefined,
 
     count: usize = 0,
@@ -46,10 +30,12 @@ const Tokenizer = struct {
     }
 
     pub fn tokenize(self: *Tokenizer, allocator: std.mem.Allocator) ![]Token {
-        self.tokens = try allocator.alloc(Token, self.source.len);
+        self.tokens = try allocator.alloc(Token, self.source.estimatedTokenSize());
+
+        const text = self.source.text();
 
         state: switch (State.start) {
-            .start => switch (self.source[self.curr]) {
+            .start => switch (text[self.curr]) {
                 'A'...'Z', 'a'...'z', '_' => {
                     self.last = self.curr;
                     continue :state .ident;
@@ -58,21 +44,31 @@ const Tokenizer = struct {
                     self.last = self.curr;
                     continue :state .whitespace;
                 },
+                '\n' => {
+                    self.last += self.curr + 1;
+                    self.push(.newline);
+
+                    self.curr += 1;
+
+                    continue :state .start;
+                },
                 0 => break :state,
                 else => unreachable,
             },
-            .ident => switch (self.source[self.last]) {
+            .ident => switch (text[self.last]) {
                 'A'...'Z', 'a'...'z', '_', '0'...'9' => {
                     self.last += 1;
                     continue :state .ident;
                 },
                 else => {
-                    self.push(.ident);
+                    const ident = text[self.curr..self.last];
+
+                    self.push(Keywords.lookup(ident) orelse .ident);
                     self.curr = self.last;
                     continue :state .start;
                 },
             },
-            .whitespace => switch (self.source[self.last]) {
+            .whitespace => switch (text[self.last]) {
                 ' ', '\t' => {
                     self.last += 1;
                     continue :state .whitespace;
@@ -100,10 +96,12 @@ comptime {
 test "lexer" {
     const allocator = std.testing.allocator;
 
-    const source = "hello        world";
-    var tokenizer: Tokenizer = .{ .source = source };
-    const tokens = try tokenizer.tokenize(allocator);
+    const source = try Source.fromText(allocator, "any type for loop");
+    defer source.deinit(allocator);
 
+    var tokenizer: Tokenizer = .{ .source = source };
+
+    const tokens = try tokenizer.tokenize(allocator);
     defer allocator.free(tokens);
 
     for (tokens) |token| {
