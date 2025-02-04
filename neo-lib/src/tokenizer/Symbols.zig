@@ -1,7 +1,8 @@
-const tokenize = @import("../tokenize.zig");
+const tokenizer = @import("../tokenizer.zig");
 const std = @import("std");
 
-const Token = tokenize.Token;
+const Source = tokenizer.Source;
+const Token = tokenizer.Token;
 
 pub const Texts = [_][]const u8{
     "(",  ")",   "{",   "}",   "[",  "]",
@@ -98,7 +99,7 @@ pub const MaxLen = 4;
 
 pub fn hashSlice(text: []const u8) u7 {
     // TODO: Credit @validark. Where tf is he finding this??
-    comptime std.debug.assert(tokenize.BackPad.len >= 3);
+    comptime std.debug.assert(Source.BackPad.len >= 3);
 
     const shift = text.len * 8;
     const mask: u32 = @intCast((@as(u64, 1) << @intCast(shift)) -% 1);

@@ -1,7 +1,8 @@
-const tokenize = @import("../tokenize.zig");
+const tokenizer = @import("../tokenizer.zig");
 const std = @import("std");
 
-const Token = tokenize.Token;
+const Source = tokenizer.Source;
+const Token = tokenizer.Token;
 
 pub const Texts = [_][]const u8{
     "comptime", "extern", "inline", "opaque", "packed",
@@ -108,11 +109,11 @@ pub fn hashSlice(text: []const u8) u7 {
         (text.ptr - 2 + text.len)[0..2];
 
     // Read the first two characters in the text. Check the Back padding to ensure we can read past the slice bounds.
-    comptime std.debug.assert(tokenize.BackPad.len >= 1);
+    comptime std.debug.assert(Source.BackPad.len >= 1);
     const lo = std.mem.readInt(u16, text.ptr[0..2], .little);
 
     // Read the last two characters in the text. Check the Front padding to ensure we can read before the slice bounds.
-    comptime std.debug.assert(tokenize.FrontPad.len >= 1);
+    comptime std.debug.assert(Source.FrontPad.len >= 1);
     const hi = std.mem.readInt(u16, span.ptr[0..2], .little);
 
     // Do some math stuff that will make the hashes for hashy. Idk. Ask @validark.
@@ -137,7 +138,6 @@ pub fn indexToTag(index: u8) Token.Tag {
 pub fn lookup(text: []const u8) ?Token.Tag {
     // TODO: The unaligned load from `text.ptr[0..8]` doesn't really matter on x86. But on other platforms this could incur a non-insignificant runtime cost.
     // TODO: See if the compiler is smart and can figure out the nullity of this lookup function will be Tag.Identifier.
-    std.debug.assert(text.len <= MaxLen);
 
     // Hash the provided key and load the expected value.
     const hash = hashSlice(text);
@@ -157,8 +157,8 @@ pub fn lookup(text: []const u8) ?Token.Tag {
 
     // TODO: Improve the mask generation.
     const mask = if (text.len == MaxLen) ~@as(u64, 0) else (@as(u64, 1) << @truncate(text.len * MaxLen)) -% 1;
-    const text_int = std.mem.readInt(u64, text.ptr[0..8], .little);
-    const kw_int = std.mem.readInt(u64, kw.ptr[0..8], .little);
+    const text_int = std.mem.readInt(u64, text.ptr[0..MaxLen], .little);
+    const kw_int = std.mem.readInt(u64, kw.ptr[0..MaxLen], .little);
 
     return if (text_int & mask == kw_int) indexToTag(index) else null;
 }
