@@ -35,13 +35,24 @@ pub const Token = extern struct {
 
     pub const Tag = blk: {
         const state_fields = std.meta.fields(States);
-        const field_size = state_fields.len + Keywords.Texts.len;
+        const field_size = state_fields.len + Symbols.Texts.len + Keywords.Texts.len;
         var fields: [field_size]std.builtin.Type.EnumField = undefined;
 
         var iter: usize = 0;
 
+        for (Symbols.Texts) |op| {
+            const hash = Symbols.hashSlice(op);
+            const index = Symbols.hashToIndex(hash);
+            // TODO: Explain why `~` is not used here. Synced with the `Symbols.hashToTag` impl.
+            fields[iter + index] = .{ .name = op ++ "\x00", .value = index };
+        }
+
+        iter += Symbols.Texts.len;
+
         for (Keywords.Texts) |kw| {
-            const index = Keywords.hashToIndex(Keywords.hashSlice(kw));
+            const hash = Keywords.hashSlice(kw);
+            const index = Keywords.hashToIndex(hash);
+            // TODO: Explain why the `~` is used here. Synced with the `Keywords.hashToTag` impl.
             fields[iter + index] = .{ .name = kw ++ "\x00", .value = ~index };
         }
 
@@ -62,5 +73,6 @@ pub const Token = extern struct {
     };
 };
 
+pub const Symbols = @import("tokenize/Symbols.zig");
 pub const Keywords = @import("tokenize/Keywords.zig");
 pub const Source = @import("tokenize/Source.zig");

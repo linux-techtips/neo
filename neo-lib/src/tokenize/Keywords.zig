@@ -70,7 +70,7 @@ pub const Masks = blk: {
     break :blk bitmask;
 };
 
-pub const PaddedTexts = blk: {
+const PaddedTexts = blk: {
     // In order to efficiently lookup a keyword, we rely on the guarantee that the maximum keyword length is 8 characters.
     // For keywords that are less than 8 keywords, we pad the remaining characters with 0 so we don't compare against garbage.
     std.debug.assert(MaxLen == 8);
@@ -98,7 +98,7 @@ pub fn hashSlice(text: []const u8) u7 {
     // Since we can guarantee that every keyword's first and last two characters are unique, we can use them as a hash.
     // However, for our unique hash table, we must map the unique 32-bits of our keywords to a unique 7-bits.
     // This does introduce the ability for hash collisions for unique keywords, but this can be caught at comptime.
-    std.debug.assert(text.len > 0);
+    std.debug.assert(text.len > 0 and text.len <= MaxLen);
 
     const span = if (@inComptime())
         // At compile time, we know that the text must have a length of at least two.
@@ -137,6 +137,7 @@ pub fn indexToTag(index: u8) Token.Tag {
 pub fn lookup(text: []const u8) ?Token.Tag {
     // TODO: The unaligned load from `text.ptr[0..8]` doesn't really matter on x86. But on other platforms this could incur a non-insignificant runtime cost.
     // TODO: See if the compiler is smart and can figure out the nullity of this lookup function will be Tag.Identifier.
+    std.debug.assert(text.len <= MaxLen);
 
     // Hash the provided key and load the expected value.
     const hash = hashSlice(text);
@@ -155,7 +156,7 @@ pub fn lookup(text: []const u8) ?Token.Tag {
     // Keyw == Text & Mask
 
     // TODO: Improve the mask generation.
-    const mask = if (text.len == 8) ~@as(u64, 0) else (@as(u64, 1) << @truncate(text.len * 8)) -% 1;
+    const mask = if (text.len == MaxLen) ~@as(u64, 0) else (@as(u64, 1) << @truncate(text.len * MaxLen)) -% 1;
     const text_int = std.mem.readInt(u64, text.ptr[0..8], .little);
     const kw_int = std.mem.readInt(u64, kw.ptr[0..8], .little);
 
