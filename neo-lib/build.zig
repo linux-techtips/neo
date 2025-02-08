@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
     const target_wasm = b.resolveTargetQuery(.{
         .os_tag = .freestanding,
         .cpu_arch = .wasm32,
+        .cpu_features_add = std.Target.wasm.featureSet(&[_]std.Target.wasm.Feature{.simd128}),
     });
 
     const root_path = b.path("src/neo.zig");

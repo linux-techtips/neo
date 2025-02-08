@@ -124,7 +124,7 @@ pub fn indexToTag(index: u8) Token.Tag {
 }
 
 pub fn lookup(text: []const u8) ?Token.Tag {
-    std.debug.assert(text.len <= MaxLen);
+    std.debug.assert(text.len > 0);
 
     const hash = hashSlice(text);
     const index = hashToIndex(hash);

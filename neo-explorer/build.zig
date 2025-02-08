@@ -33,6 +33,14 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("zig-out/lib/neo.wasm"),
     });
 
+    const zap = b.dependency("zap", .{
+        .target = target,
+        .optimize = optimize,
+        .openssl = false, // set to true to enable TLS support
+    });
+
+    neo_explorer_exe.root_module.addImport("zap", zap.module("zap"));
+
     b.installArtifact(neo_explorer_exe);
 
     const run_cmd = b.addRunArtifact(neo_explorer_exe);
