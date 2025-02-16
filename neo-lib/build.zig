@@ -74,4 +74,14 @@ pub fn build(b: *std.Build) void {
     });
 
     b.default_step.dependOn(&neo_install.step);
+
+    const test_step = b.step("test", "Run unit tests");
+
+    const tests = b.addTest(.{
+        .root_source_file = root_path,
+        .target = target_native,
+    });
+
+    const run_tests = b.addRunArtifact(tests);
+    test_step.dependOn(&run_tests.step);
 }

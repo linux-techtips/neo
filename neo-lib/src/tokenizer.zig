@@ -191,6 +191,21 @@ pub const Token = extern struct {
     };
 };
 
+// test "tokenize" {
+//     const source = try Source.fromText(std.heap.page_allocator, "Hello World");
+//     const tokens = try tokenize(std.heap.page_allocator, source);
+
+//     const expected = [_]Token{
+//         .{ .tag = .ident, .len = 5 },
+//         .{ .tag = .whitespace, .len = 1 },
+//         .{ .tag = .ident, .len = 5 },
+//         .{ .tag = .newline, .len = 1 },
+//         .{ .tag = .eof, .len = 0 },
+//     };
+
+//     try std.testing.expectEqual(tokens, expected[0..]);
+// }
+
 pub const tokenize = Tokenizer.tokenize;
 
 pub const Symbols = @import("tokenizer/Symbols.zig");
