@@ -174,7 +174,6 @@ pub const Token = extern struct {
         // TODO: Explan the whole 128 | thing.
         invalid = 0xaa, // TODO: I would rather this be 0.
         eof = 128 | @as(u8, 0),
-        sentinel_operator = 128 | @as(u8, 20),
 
         ident = 128 | @as(u8, 1),
         builtin = 128 | @as(u8, 9),
@@ -187,8 +186,71 @@ pub const Token = extern struct {
 
         string = 128 | @as(u8, 4),
         string_ident = 128 | @as(u8, 12),
-        char_literal = 128 | @as(u8, 19),
+        char = 128 | @as(u8, 19),
     };
+
+    const Precedences = blk: {
+        var table = std.mem.zeroes([256]u8);
+
+        const precs = [_][]const Tag{
+            &[_]Tag{.@"("},
+            &[_]Tag{.@")"},
+            &[_]Tag{ .@"+", .@"-" },
+            &[_]Tag{ .@"*", .@"/" },
+        };
+
+        for (precs, 1..) |ops, i| {
+            for (ops) |op| table[@intFromEnum(op)] = i;
+        }
+
+        break :blk table;
+    };
+
+    pub fn precedence(self: Token) u8 {
+        return Precedences[@intFromEnum(self.tag)];
+    }
+
+    const Classification = enum(u8) {
+        symbol = 0,
+        unary,
+        binary,
+        operand,
+        reset,
+    };
+
+    const Classifications = blk: {
+        var table = [1]Classification{.symbol} ** 256;
+
+        for (table[@intFromEnum(Kinds.ident)..@intFromEnum(Kinds.char)]) |*slot| {
+            slot.* = .operand;
+        }
+
+        for ([_]Tag{ .@"+", .@"-", .@"*", .@"/" }) |op| {
+            table[@intFromEnum(op)] = .binary;
+        }
+
+        for ([_]Tag{.@"("}) |op| {
+            table[@intFromEnum(op)] = .unary;
+        }
+
+        for ([_]Tag{ .@")", .newline }) |op| {
+            table[@intFromEnum(op)] = .reset;
+        }
+
+        break :blk table;
+    };
+
+    pub fn classify(self: Token) Classification {
+        return Classifications[@intFromEnum(self.tag)];
+    }
+
+    pub fn isOperator(self: Token) bool {
+        return self.classify() != .operand;
+    }
+
+    pub fn isOperand(self: Token) bool {
+        return self.classify() == .operand;
+    }
 };
 
 // test "tokenize" {
