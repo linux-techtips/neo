@@ -14,13 +14,13 @@ pub fn build(b: *std.Build) void {
     const target_wasm = b.resolveTargetQuery(.{
         .os_tag = .freestanding,
         .cpu_arch = .wasm32,
-        .cpu_features_add = std.Target.wasm.featureSet(&[_]std.Target.wasm.Feature{.simd128}),
+        .cpu_features_add = std.Target.wasm.featureSet(&[_]std.Target.wasm.Feature{.multivalue}),
     });
 
     const root_path = b.path("src/neo.zig");
 
-    const wasm_pages_max = b.option(u64, "wasm-pages-max", "Set the maximum number of pages accessible by wasm") orelse 100;
-    const wasm_pages_min = b.option(u64, "wasm-pages-min", "Set the minimum number of pages accessible by wasm") orelse 10;
+    const wasm_pages_max = b.option(u64, "wasm-pages-max", "Set the maximum number of pages accessible by wasm") orelse 1000;
+    const wasm_pages_min = b.option(u64, "wasm-pages-min", "Set the minimum number of pages accessible by wasm") orelse 100;
     const mode_opt = b.option([]const u8, "mode", "Set the build mode for libneo") orelse "shared";
 
     const map = std.StaticStringMap(Mode).initComptime(.{
@@ -55,12 +55,10 @@ pub fn build(b: *std.Build) void {
     };
 
     if (mode == .wasm) {
-        neo_lib.global_base = 6560;
         neo_lib.entry = .disabled;
         neo_lib.rdynamic = true;
-        neo_lib.import_memory = true;
-        neo_lib.stack_size = std.wasm.page_size;
 
+        neo_lib.import_memory = true;
         neo_lib.initial_memory = std.wasm.page_size * wasm_pages_min;
         neo_lib.max_memory = std.wasm.page_size * wasm_pages_max;
     }

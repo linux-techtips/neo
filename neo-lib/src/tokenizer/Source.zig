@@ -3,7 +3,7 @@ const std = @import("std");
 const Source = @This();
 
 // TODO: Handle non-simd targets better.
-pub const Chunk = @Vector(std.simd.suggestVectorLength(u8) orelse 4, u8);
+pub const Chunk = @Vector(std.simd.suggestVectorLength(u8) orelse @sizeOf(usize), u8);
 pub const ChunkAlign = @alignOf(Chunk);
 pub const ChunkSize = @sizeOf(Chunk);
 

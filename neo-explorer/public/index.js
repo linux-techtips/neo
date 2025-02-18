@@ -14,16 +14,14 @@ const libneo = {
   exports: module.instance.exports,
   encoder: new TextEncoder("utf-8"),
   decoder: new TextDecoder("utf-8"),
+  memory,
 
-  make_source: function (text) {
+  source_alloc: function (text) {
     const { ptr: textPtr, len: textLen } = this.alloc(text.length);
     if (textPtr == 0) throw new Error("Failed to allocate memory for text");
-    console.log(textPtr, textLen);
 
-    const encodeBuffer = new Uint8Array(memory.buffer, textPtr, textLen);
+    const encodeBuffer = new Uint8Array(this.memory.buffer, textPtr, textLen);
     this.encoder.encodeInto(text, encodeBuffer);
-
-    console.log(encodeBuffer);
 
     const sourceInt = this.exports.Neo_Source_Alloc(textPtr, textLen);
     if (sourceInt == 0n)
@@ -32,23 +30,20 @@ const libneo = {
     const sourcePtr = Number(sourceInt & 0xffffffffn);
     const sourceLen = Number(sourceInt >> 32n);
 
-    console.log(sourcePtr, sourceLen);
+    return { ptr: sourcePtr, len: sourceLen };
+  },
 
-    const decodeBuffer = new Uint8Array(memory.buffer, sourcePtr, sourceLen);
-    console.log(decodeBuffer);
-
-    const source = this.decoder.decode(decodeBuffer);
-    console.log(source);
+  source_free: function ({ ptr, len }) {
+    this.exports.Neo_Source_Free(ptr, len);
   },
 
   alloc: function (len) {
     return { ptr: this.exports.Neo_Alloc(len), len };
   },
 
-  dealloc: function ({ ptr, len }) {
-    this.exports.Neo_Dealloc(ptr, len);
+  free: function ({ ptr, len }) {
+    this.exports.Neo_Free(ptr, len);
   },
 };
 
 globalThis.libneo = libneo;
-libneo.make_source("Hello Cruel and unforgiving world");
