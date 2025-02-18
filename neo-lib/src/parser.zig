@@ -50,20 +50,17 @@ const Cursor = struct {
 };
 
 // https://en.wikipedia.org/wiki/Shunting_yard_algorithm
-pub fn parse(source: tokenizer.Source, tokens: *[]tokenizer.Token) !void {
-    std.debug.print("POSTFIX PARSER\n", .{});
+pub fn parse_postfix(heap_allocator: std.mem.Allocator, source: tokenizer.Source, tokens: []tokenizer.Token) ![]tokenizer.Token {
+    var tree = try std.ArrayList(tokenizer.Token).initCapacity(heap_allocator, tokens.len);
+    errdefer tree.deinit();
 
-    var cursor = Cursor.init(tokens.*, source);
-
-    // TODO: We could reuse the back padding of the Source buffer as a stack? Seems fringe.
-    var buffer: [2048]u8 = undefined;
+    var buffer: [1024]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
 
-    const allocator = fba.allocator();
+    const stack_allocator = fba.allocator();
+    var stack = std.ArrayList(tokenizer.Token).init(stack_allocator);
 
-    var stack = std.ArrayListUnmanaged(tokenizer.Token){};
-    var index: u32 = 0;
-
+    var cursor = Cursor.init(tokens, source);
     while (cursor.iter()) |it| {
         const cur, _ = it;
 
@@ -71,82 +68,66 @@ pub fn parse(source: tokenizer.Source, tokens: *[]tokenizer.Token) !void {
             .reset => {
                 while (stack.popOrNull()) |top| {
                     if (top.tag == .@"(") break;
-
-                    std.debug.print("{s}\n", .{@tagName(top.tag)});
-                    tokens.*[index] = top;
-                    index += 1;
+                    try tree.append(top);
                 }
 
-                std.debug.print("{s}\n", .{@tagName(cur.tag)});
-                tokens.*[index] = cur;
-                index += 1;
+                try tree.append(cur);
             },
-            .unary => try stack.append(allocator, cur),
+            .unary => try stack.append(cur),
             .binary => {
                 while (true) if (stack.getLastOrNull()) |top| {
                     if (top.precedence() < cur.precedence()) break;
-
-                    std.debug.print("{s}\n", .{@tagName(top.tag)});
-                    tokens.*[index] = stack.pop();
-                    index += 1;
+                    try tree.append(stack.pop());
                 } else break;
 
-                try stack.append(allocator, cur);
+                try stack.append(cur);
             },
             else => {
-                std.debug.print("{s}\n", .{@tagName(cur.tag)});
-                tokens.*[index] = cur;
-                index += 1;
+                try tree.append(cur);
             },
         }
     }
 
-    while (stack.popOrNull()) |token| {
-        std.debug.print("{s}\n", .{@tagName(token.tag)});
-        tokens.*[index] = token;
-        index += 1;
-    }
-}
+    while (stack.popOrNull()) |token| try tree.append(token);
 
-const WalkError = error{
-    UnbalancedExpression,
-};
-
-fn prefix(allocator: std.mem.Allocator, tokens: []tokenizer.Token) !void {
-    std.debug.print("PREFIX PARSER\n", .{});
-
-    var stack = try std.ArrayListUnmanaged(tokenizer.Token).initCapacity(allocator, tokens.len);
-    defer stack.deinit(allocator);
-
-    for (tokens) |token| if (token.isOperator()) {
-        const rhs = stack.pop();
-        const lhs = stack.pop();
-
-        const expr = [_]tokenizer.Token{ token, rhs, lhs };
-        try stack.appendSlice(allocator, &expr);
-    } else try stack.append(allocator, token);
-
-    for (stack.items) |token| {
-        std.debug.print("{s}\n", .{@tagName(token.tag)});
-    }
+    return tree.items;
 }
 
 test "parse" {
     const source = try tokenizer.Source.fromText(std.testing.allocator, "a*b+c+d");
     defer source.deinit(std.testing.allocator);
 
-    var tokens = try tokenizer.tokenize(std.testing.allocator, source);
+    const tokens = try tokenizer.tokenize(std.testing.allocator, source);
     defer std.testing.allocator.free(tokens);
 
-    try parse(source, &tokens);
-    try prefix(std.testing.allocator, tokens);
+    const expected_tokens = [_]tokenizer.Token{
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"*", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(tokenizer.Token, tokens, &expected_tokens);
+
+    const tree = try parse_postfix(std.testing.allocator, source, tokens);
+    defer std.testing.allocator.free(tree);
+
+    const expected_tree = [_]tokenizer.Token{
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"*", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(tokenizer.Token, tree, &expected_tree);
 }
-
-// test "precedence" {
-//     const t0 = tokenizer.Token{ .tag = .number, .len = 0 };
-//     try std.testing.expectEqual(t0.precedence(), 0);
-
-//     const t1 = tokenizer.Token{ .tag = .@"+", .len = 0 };
-//     const t2 = tokenizer.Token{ .tag = .@"*", .len = 0 };
-//     try std.testing.expect(t2.precedence() > t1.precedence());
-// }

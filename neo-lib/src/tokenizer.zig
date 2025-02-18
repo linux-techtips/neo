@@ -253,20 +253,41 @@ pub const Token = extern struct {
     }
 };
 
-// test "tokenize" {
-//     const source = try Source.fromText(std.heap.page_allocator, "Hello World");
-//     const tokens = try tokenize(std.heap.page_allocator, source);
+test "tokenize" {
+    const text =
+        \\
+        \\ a * b + c + d
+        \\
+    ;
 
-//     const expected = [_]Token{
-//         .{ .tag = .ident, .len = 5 },
-//         .{ .tag = .whitespace, .len = 1 },
-//         .{ .tag = .ident, .len = 5 },
-//         .{ .tag = .newline, .len = 1 },
-//         .{ .tag = .eof, .len = 0 },
-//     };
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
 
-//     try std.testing.expectEqual(tokens, expected[0..]);
-// }
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"*", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .newline, .len = 2 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
 
 pub const tokenize = Tokenizer.tokenize;
 

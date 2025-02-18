@@ -53,12 +53,3 @@ export fn Neo_Source_Dealloc(source: Neo_Source) callconv(.C) void {
 export fn Neo_Token_Name(tag: tokenizer.Token.Tag) callconv(.C) [*:0]const u8 {
     return @tagName(tag);
 }
-
-// test "Neo Token Name" {
-//     const tag: tokenizer.Token.Tag = .@"+=";
-//     const name = Neo_Token_Name(tag);
-
-//     try testing.expectEqual(name, "+=");
-// }
-
-// const testing = std.testing;
