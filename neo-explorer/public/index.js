@@ -17,22 +17,27 @@ const libneo = {
 
   make_source: function (text) {
     const { ptr: textPtr, len: textLen } = this.alloc(text.length);
+    if (textPtr == 0) throw new Error("Failed to allocate memory for text");
     console.log(textPtr, textLen);
 
     const encodeBuffer = new Uint8Array(memory.buffer, textPtr, textLen);
+    this.encoder.encodeInto(text, encodeBuffer);
 
     console.log(encodeBuffer);
 
-    this.encoder.encodeInto(text, encodeBuffer);
+    const sourceInt = this.exports.Neo_Source_Alloc(textPtr, textLen);
+    if (sourceInt == 0n)
+      throw new Error("Failed to allocate memory for result");
 
-    const sourcePtr = this.exports.Neo_Source_Alloc(textPtr, textLen);
-    console.log(sourcePtr);
+    const sourcePtr = Number(sourceInt & 0xffffffffn);
+    const sourceLen = Number(sourceInt >> 32n);
 
-    const decodeBuffer = new Uint8Array(memory.buffer, sourcePtr, 5);
+    console.log(sourcePtr, sourceLen);
 
+    const decodeBuffer = new Uint8Array(memory.buffer, sourcePtr, sourceLen);
     console.log(decodeBuffer);
-    const source = this.decoder.decode(decodeBuffer);
 
+    const source = this.decoder.decode(decodeBuffer);
     console.log(source);
   },
 
@@ -46,3 +51,4 @@ const libneo = {
 };
 
 globalThis.libneo = libneo;
+libneo.make_source("Hello Cruel and unforgiving world");
