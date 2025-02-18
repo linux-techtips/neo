@@ -30,13 +30,14 @@ export fn Neo_Source_Alloc(text_ptr: [*c]const u8, text_len: usize) callconv(.C)
 export fn Neo_Source_Free(source_ptr: [*c]align(tokenizer.Source.ChunkSize) u8, source_len: usize) callconv(.C) void {
     if (@intFromPtr(source_ptr) == 0) return;
 
-    @as(tokenizer.Source, .{ .buffer = @alignCast(source_ptr[0..source_len :0]), .path = undefined }).deinit(allocator);
+    const source = tokenizer.Source{ .buffer = @alignCast(source_ptr[0..source_len :0]), .path = undefined };
+    source.deinit(allocator);
 }
 
 export fn Neo_Tokenize(source_ptr: [*c]align(tokenizer.Source.ChunkSize) u8, source_len: usize) callconv(.C) u64 {
     if (source_ptr == 0) return 0;
 
-    const source = @as(tokenizer.Source, .{ .buffer = @alignCast(source_ptr[0..source_len :0]), .path = undefined });
+    const source = tokenizer.Source{ .buffer = @alignCast(source_ptr[0..source_len :0]), .path = undefined };
     const tokens = tokenizer.tokenize(allocator, source) catch return 0;
 
     return @bitCast(Wasm_Slice{

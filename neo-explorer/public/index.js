@@ -10,6 +10,10 @@ const module = await WebAssembly.instantiateStreaming(
   },
 );
 
+const bigIntToSlice = function (bigInt) {
+  return { ptr: Number(bigInt & 0xffffffffn), len: Number(bigInt >> 32n) };
+};
+
 const libneo = {
   exports: module.instance.exports,
   encoder: new TextEncoder("utf-8"),
@@ -27,10 +31,7 @@ const libneo = {
     if (sourceInt == 0n)
       throw new Error("Failed to allocate memory for result");
 
-    const sourcePtr = Number(sourceInt & 0xffffffffn);
-    const sourceLen = Number(sourceInt >> 32n);
-
-    return { ptr: sourcePtr, len: sourceLen };
+    return bigIntToSlice(sourceInt);
   },
 
   source_free: function ({ ptr, len }) {
