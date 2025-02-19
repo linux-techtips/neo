@@ -5,9 +5,7 @@ const memory = new WebAssembly.Memory({
 
 const module = await WebAssembly.instantiateStreaming(
   await fetch("/neo.wasm"),
-  {
-    env: { memory },
-  },
+  { env: { memory } },
 );
 
 const bigIntToSlice = function (bigInt) {
@@ -15,22 +13,35 @@ const bigIntToSlice = function (bigInt) {
 };
 
 const libneo = {
-  exports: module.instance.exports,
   encoder: new TextEncoder("utf-8"),
   decoder: new TextDecoder("utf-8"),
+  exports: module.instance.exports,
   memory,
 
-  source_alloc: function (text) {
-    const { ptr: textPtr, len: textLen } = this.alloc(text.length);
-    if (textPtr == 0) throw new Error("Failed to allocate memory for text");
+  token_name: function (tag) {
+    const ptr = this.exports.Neo_Token_Name(tag);
+    const unbounded = new Uint8Array(this.memory.buffer, ptr);
 
-    const encodeBuffer = new Uint8Array(this.memory.buffer, textPtr, textLen);
+    let i = 0;
+    for (; unbounded[i] !== 0; i += 1);
+
+    const buffer = new Uint8Array(this.memory.buffer, ptr, i);
+    return this.decoder.decode(buffer);
+  },
+
+  tokenize: function (text) {
+    const { ptr, len } = this.source_alloc(text);
+    const tokensInt = this.exports.Neo_Tokenize(ptr, len);
+    return bigIntToSlice(tokensInt);
+  },
+
+  source_alloc: function (text) {
+    const { ptr, len } = this.alloc(text.length, true);
+
+    const encodeBuffer = new Uint8Array(this.memory.buffer, ptr, len);
     this.encoder.encodeInto(text, encodeBuffer);
 
-    const sourceInt = this.exports.Neo_Source_Alloc(textPtr, textLen);
-    if (sourceInt == 0n)
-      throw new Error("Failed to allocate memory for result");
-
+    const sourceInt = this.exports.Neo_Source_Alloc(ptr, len);
     return bigIntToSlice(sourceInt);
   },
 
@@ -48,3 +59,5 @@ const libneo = {
 };
 
 globalThis.libneo = libneo;
+
+
