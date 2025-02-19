@@ -19,20 +19,15 @@ const libneo = {
   memory,
 
   token_name: function (tag) {
-    const ptr = this.exports.Neo_Token_Name(tag);
-    const unbounded = new Uint8Array(this.memory.buffer, ptr);
+    const { ptr, len } = bigIntToSlice(this.exports.Neo_Token_Name(tag));
 
-    let i = 0;
-    for (; unbounded[i] !== 0; i += 1);
+    const buffer = new Uint8Array(this.memory.buffer, ptr, len);
 
-    const buffer = new Uint8Array(this.memory.buffer, ptr, i);
     return this.decoder.decode(buffer);
   },
 
-  tokenize: function (text) {
-    const { ptr, len } = this.source_alloc(text);
-    const tokensInt = this.exports.Neo_Tokenize(ptr, len);
-    return bigIntToSlice(tokensInt);
+  tokenize: function ({ ptr, len }) {
+    return bigIntToSlice(this.exports.Neo_Tokenize(ptr, len));
   },
 
   source_alloc: function (text) {
@@ -59,5 +54,3 @@ const libneo = {
 };
 
 globalThis.libneo = libneo;
-
-
