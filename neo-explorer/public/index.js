@@ -26,8 +26,7 @@ const libneo = {
     return this.decoder.decode(buffer);
   },
 
-  tokenize: function (text) {
-    const { ptr, len } = this.source_alloc(text);
+  tokenize: function ({ ptr, len }) {
     return bigIntToSlice(this.exports.Neo_Tokenize(ptr, len));
   },
 
@@ -54,22 +53,61 @@ const libneo = {
   },
 };
 
-globalThis.libneo = libneo;
+const output = document.getElementById("output");
+const input = document.getElementById("input");
 
-const text = "Hello World! 2 + 2 = 4";
-console.log(text);
+const debounce = function (fn, delay) {
+  let timeout = null;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+};
 
-const { ptr, len } = libneo.tokenize(text);
-const tokenBuffer = new Uint16Array(libneo.memory.buffer, ptr, len);
-const byteBuffer = new Uint8Array(
-  tokenBuffer.buffer,
-  tokenBuffer.byteOffset,
-  tokenBuffer.byteLength,
-);
+const handleTokenize = function (text) {
+  const start = performance.now();
 
-for (let i = 0; i < byteBuffer.length; i += 2) {
-  const [tag, len] = [byteBuffer[i], byteBuffer[i + 1]];
-  console.log(`Token { ${libneo.token_name(tag)}, ${len} }`);
-}
+  const report = () => {
+    const end = performance.now();
+    console.log(`tokenization took ${end - start}ms`);
+  };
 
-libneo.free({ ptr, len });
+  if (!text) {
+    output.textContent = "";
+    report();
+    return;
+  }
+
+  const source = libneo.source_alloc(text);
+  const tokens = libneo.tokenize(source);
+
+  try {
+    const tokenBuffer = new Uint16Array(
+      libneo.memory.buffer,
+      tokens.ptr,
+      tokens.len,
+    );
+    const byteBuffer = new Uint8Array(
+      tokenBuffer.buffer,
+      tokenBuffer.byteOffset,
+      tokenBuffer.byteLength,
+    );
+
+    let outputText = "";
+    for (let i = 0; i < byteBuffer.length; i += 2) {
+      const [tag, len] = [byteBuffer[i], byteBuffer[i + 1]];
+      outputText += `Token { ${libneo.token_name(tag)}, ${len} }\n`;
+
+      // TODO: Remove hardcoded eof check.
+      if (tag === 128) break;
+    }
+
+    output.textContent = outputText;
+  } finally {
+    libneo.free(tokens);
+    libneo.source_free(source);
+    report();
+  }
+};
+
+input.addEventListener("input", () => debounce(handleTokenize, 0)(input.value));
