@@ -123,7 +123,7 @@ const Tokenizer = struct {
     }
 
     fn shrink(self: *Tokenizer, allocator: std.mem.Allocator) []Token {
-        return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else 0];
+        return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
 };
 
@@ -283,6 +283,26 @@ test "tokenize" {
         .{ .tag = .whitespace, .len = 1 },
         .{ .tag = .ident, .len = 1 },
         .{ .tag = .newline, .len = 2 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
+
+test "wasm" {
+    const text = "Hello World";
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .ident, .len = 5 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 5 },
+        .{ .tag = .newline, .len = 1 },
         .{ .tag = .eof, .len = 0 },
     };
 
