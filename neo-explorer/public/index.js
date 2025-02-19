@@ -5,9 +5,7 @@ const memory = new WebAssembly.Memory({
 
 const module = await WebAssembly.instantiateStreaming(
   await fetch("/neo.wasm"),
-  {
-    env: { memory },
-  },
+  { env: { memory } },
 );
 
 const bigIntToSlice = function (bigInt) {
@@ -21,23 +19,16 @@ const libneo = {
   memory,
 
   token_name: function (tag) {
-    const ptr = this.exports.Neo_Token_Name(tag);
-    const unbounded = new Uint8Array(this.memory.buffer, ptr);
+    const { ptr, len } = bigIntToSlice(this.exports.Neo_Token_Name(tag));
 
-    let i = 0;
-    for (; unbounded[i] !== 0; i += 1);
+    const buffer = new Uint8Array(this.memory.buffer, ptr, len);
 
-    const buffer = new Uint8Array(this.memory.buffer, ptr, i);
     return this.decoder.decode(buffer);
   },
 
   tokenize: function (text) {
     const { ptr, len } = this.source_alloc(text);
-
-    const tokensInt = this.exports.Neo_Tokenize(ptr, len);
-    if (tokensInt == 0n) throw new Error("Failed to tokenize text");
-
-    return bigIntToSlice(tokensInt);
+    return bigIntToSlice(this.exports.Neo_Tokenize(ptr, len));
   },
 
   source_alloc: function (text) {
@@ -65,14 +56,19 @@ const libneo = {
 
 globalThis.libneo = libneo;
 
-const text = "Hello World";
+const text = "Hello World! 2 + 2 = 4";
 console.log(text);
 
 const { ptr, len } = libneo.tokenize(text);
-const buffer = new Uint8Array(libneo.memory.buffer, ptr, len * 2);
+const tokenBuffer = new Uint16Array(libneo.memory.buffer, ptr, len);
+const byteBuffer = new Uint8Array(
+  tokenBuffer.buffer,
+  tokenBuffer.byteOffset,
+  tokenBuffer.byteLength,
+);
 
-for (let i = 0; i < len; i += 2) {
-  const [tag, len] = [buffer[i], buffer[i + 1]];
+for (let i = 0; i < byteBuffer.length; i += 2) {
+  const [tag, len] = [byteBuffer[i], byteBuffer[i + 1]];
   console.log(`Token { ${libneo.token_name(tag)}, ${len} }`);
 }
 

@@ -14,6 +14,13 @@ pub const BackPad = FrontPad ++ "\x00" ** 63;
 buffer: [:0]align(ChunkSize) const u8,
 path: []const u8,
 
+pub fn fromRawBuffer(ptr: [*]const u8, len: usize) Source {
+    return .{
+        .buffer = @alignCast(ptr[0..len :0]),
+        .path = "(anonymous)",
+    };
+}
+
 pub fn fromFile(allocator: std.mem.Allocator, path: []const u8) !Source {
     const file = try std.fs.cwd().openFile(path, .{ .mode = .read_only });
     defer file.close();

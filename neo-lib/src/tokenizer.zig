@@ -87,6 +87,7 @@ const Tokenizer = struct {
                 },
             },
             .number => switch (self.text[self.index]) {
+                // TODO: Handle more than just integral numbers.
                 '0'...'9' => {
                     self.index += 1;
                     continue :state .number;
@@ -112,8 +113,19 @@ const Tokenizer = struct {
     }
 
     fn push(self: *Tokenizer, tag: Token.Tag) void {
-        // TODO: Overflow check
-        self.tokens[self.tokenCount] = .{ .tag = tag, .len = @intCast(self.index - self.begin) };
+        const len = self.index - self.begin;
+
+        // TODO: Fold len info into adjacent tokens with known lengths.
+        // TODO: Figure out how to handle invalid tokenzier state. Maybe ft. Chandler Carruth?
+        const token: Token = if (len > std.math.maxInt(u8)) .{
+            .tag = .invalid,
+            .len = 0,
+        } else .{
+            .tag = tag,
+            .len = @intCast(len),
+        };
+
+        self.tokens[self.tokenCount] = token;
         self.tokenCount += 1;
     }
 
@@ -123,142 +135,19 @@ const Tokenizer = struct {
     }
 
     fn shrink(self: *Tokenizer, allocator: std.mem.Allocator) []Token {
+        // TODO: Handle non-resizable allocator like wasm better.
+        // The issue being, we don't want to return a slice that points past the valid tokens.
+        // We also don't want to return a slice that won't allow us to free the allocated memory if resize fails.
         return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
 };
 
-pub const Token = extern struct {
-    tag: Tag,
-    len: u8,
-
-    pub const Tag = blk: {
-        const kinds_fields = std.meta.fields(Kinds);
-        const field_size = kinds_fields.len + Symbols.Texts.len + Keywords.Texts.len;
-        var fields: [field_size]std.builtin.Type.EnumField = undefined;
-
-        var iter: usize = 0;
-
-        for (Symbols.Texts) |op| {
-            const hash = Symbols.hashSlice(op);
-            const index = Symbols.hashToIndex(hash);
-            // TODO: Explain why `~` is not used here. Synced with the `Symbols.hashToTag` impl.
-            fields[iter + index] = .{ .name = op ++ "\x00", .value = index };
-        }
-
-        iter += Symbols.Texts.len;
-
-        for (Keywords.Texts) |kw| {
-            const hash = Keywords.hashSlice(kw);
-            const index = Keywords.hashToIndex(hash);
-            // TODO: Explain why the `~` is used here. Synced with the `Keywords.hashToTag` impl.
-            fields[iter + index] = .{ .name = kw ++ "\x00", .value = ~index };
-        }
-
-        iter += Keywords.Texts.len;
-
-        for (kinds_fields, 0..) |kind, i| {
-            fields[iter + i] = kind;
-        }
-
-        break :blk @Type(.{
-            .@"enum" = .{
-                .tag_type = u8,
-                .fields = &fields,
-                .decls = &.{},
-                .is_exhaustive = true,
-            },
-        });
-    };
-
-    pub const Kinds = enum(u8) {
-        // TODO: Explan the whole 128 | thing.
-        invalid = 0xaa, // TODO: I would rather this be 0.
-        eof = 128 | @as(u8, 0),
-
-        ident = 128 | @as(u8, 1),
-        builtin = 128 | @as(u8, 9),
-        number = 128 | @as(u8, 17),
-
-        whitespace = 128 | @as(u8, 34),
-        newline = 128 | @as(u8, 35),
-
-        symbol = 128 | @as(u8, 3),
-
-        string = 128 | @as(u8, 4),
-        string_ident = 128 | @as(u8, 12),
-        char = 128 | @as(u8, 19),
-    };
-
-    const Precedences = blk: {
-        var table = std.mem.zeroes([256]u8);
-
-        const precs = [_][]const Tag{
-            &[_]Tag{.@"("},
-            &[_]Tag{.@")"},
-            &[_]Tag{ .@"+", .@"-" },
-            &[_]Tag{ .@"*", .@"/" },
-        };
-
-        for (precs, 1..) |ops, i| {
-            for (ops) |op| table[@intFromEnum(op)] = i;
-        }
-
-        break :blk table;
-    };
-
-    pub fn precedence(self: Token) u8 {
-        return Precedences[@intFromEnum(self.tag)];
-    }
-
-    const Classification = enum(u8) {
-        symbol = 0,
-        unary,
-        binary,
-        operand,
-        reset,
-    };
-
-    const Classifications = blk: {
-        var table = [1]Classification{.symbol} ** 256;
-
-        for (table[@intFromEnum(Kinds.ident)..@intFromEnum(Kinds.char)]) |*slot| {
-            slot.* = .operand;
-        }
-
-        for ([_]Tag{ .@"+", .@"-", .@"*", .@"/" }) |op| {
-            table[@intFromEnum(op)] = .binary;
-        }
-
-        for ([_]Tag{.@"("}) |op| {
-            table[@intFromEnum(op)] = .unary;
-        }
-
-        for ([_]Tag{ .@")", .newline }) |op| {
-            table[@intFromEnum(op)] = .reset;
-        }
-
-        break :blk table;
-    };
-
-    pub fn classify(self: Token) Classification {
-        return Classifications[@intFromEnum(self.tag)];
-    }
-
-    pub fn isOperator(self: Token) bool {
-        return self.classify() != .operand;
-    }
-
-    pub fn isOperand(self: Token) bool {
-        return self.classify() == .operand;
-    }
-};
-
 test "tokenize" {
-    const text =
+    const text = (
         \\
         \\ a * b + c + d
         \\
-    ;
+    );
 
     const source = try Source.fromText(std.testing.allocator, text);
     defer source.deinit(std.testing.allocator);
@@ -289,28 +178,9 @@ test "tokenize" {
     try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
 }
 
-test "wasm" {
-    const text = "Hello World";
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .ident, .len = 5 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .ident, .len = 5 },
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
-}
-
 pub const tokenize = Tokenizer.tokenize;
 
+pub const Token = @import("tokenizer/Token.zig");
 pub const Symbols = @import("tokenizer/Symbols.zig");
 pub const Keywords = @import("tokenizer/Keywords.zig");
 pub const Source = @import("tokenizer/Source.zig");
