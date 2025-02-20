@@ -1,10 +1,15 @@
 import './neo.js'
 
-// placeholder, replaced with dom interaction 
-//const text = "\"Hello, world.\", 5 + 2";
+const output = document.getElementById("token-text");
+const input = document.getElementById("neo-code-input-box");
 
-//const source = libneo.source_alloc(text);
-//const tokens = libneo.tokenize(source);
+const debounce = function (fn, delay) {
+  let timeout = null;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+};
 
 const handleTokenize = function (text) {
   const start = performance.now();
@@ -44,7 +49,7 @@ const handleTokenize = function (text) {
       if (tag === 128) break;
     }
 
-    console.log(outputText);
+    output.textContent = outputText;
   } finally {
     libneo.free(tokens);
     libneo.source_free(source);
@@ -52,4 +57,4 @@ const handleTokenize = function (text) {
   }
 };
 
-handleTokenize("This is awesome. 5 + 3 = 8");
+input.addEventListener("input", () => debounce(handleTokenize, 0)(input.value));

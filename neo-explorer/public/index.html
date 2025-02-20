@@ -1,13 +1,75 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Neo Explorer</title>
+        <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16.png">
+        <link rel="manifest" href="/site.webmanifest">
+        <script src="scripts/prism.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.3/code-input.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.3/plugins/indent.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.3/plugins/prism-line-numbers.min.js"></script>
+        <script src="scripts/prism-line-numbers.min.js"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/WebCoder49/code-input@2.3/code-input.min.css">
+        <link rel="stylesheet" href="styles/theme-dark.css">
+        <link rel="stylesheet" href="styles/prism-line-numbers.min.css">
     </head>
     <body>
-        Hello World
+        <header>
+            <div class="title-card">
+                <img class="logo" src="images/logo.png"/>
+                <h1 class="title">The Neo Explorer</h1>
+                <p style="color: lime; padding-left: 12px;">
+                    Note: Page readjustment due to text over is extremely buggy rn.
+                    I will fix it by the time I push the next update. I hate CSS.
+                </p>
+            </div>
+            <nav id="header-nav">
+                <a href="draft.html">Draft</a>
+                <a href="about.html">About</a>
+                <a href="contact.html">Contact</a>
+            </nav>
+        </header>
+        <div id="main">
+            <!-- TODO: Add autocompletion of brackets etc., also add highlighting for builtins (like #import) -->
+            
+            <div class="code-view">
+
+                <div class="window editor">
+
+                    <div class="window-config">
+                        <div class="dropdown">
+                            <button class="dropbtn">
+                                Templates ▼
+                            </button>
+                            <div class="dropdown-content">
+                                <button class="template-select">Hello Neo!</button>
+                                <button class="template-select">Data Types</button>
+                                <button class="template-select">A Simple Loop</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <code-input class="code-box line-numbers" id="neo-code-input-box" language="Neo"></code-input>
+                </div>
+
+                <div class="window output">
+                    <div class="window-config"></div>
+                    <pre class="code-box" id="token-text">Token output will be written here.</pre>
+                </div>
+
+            </div>
+
+        </div>
+        <footer>
+            <p>Copyright (c) 2025 <code>.{ linuxtechtips, makichiis }</code></p>
+        </footer>
     </body>
-    <script src="./neo.js" type="module" async></script>
-    <script src="./index.js" type="module"></script>
+    <script src="./scripts/neo.js" type="module" async></script>
+    <script src="./scripts/index.js" type="module"></script>
+
+    <script src="./scripts/events.js"></script>
 </html>

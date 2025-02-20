@@ -5,3 +5,5 @@ zig-out/
 
 .direnv/
 result
+
+neo-explorer/public/neo.wasm
