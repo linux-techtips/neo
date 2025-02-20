@@ -12,7 +12,7 @@ const bigIntToSlice = function (bigInt) {
   return { ptr: Number(bigInt & 0xffffffffn), len: Number(bigInt >> 32n) };
 };
 
-const libneo = {
+export const libneo = {
   encoder: new TextEncoder("utf-8"),
   decoder: new TextDecoder("utf-8"),
   exports: module.instance.exports,
@@ -52,5 +52,3 @@ const libneo = {
     this.exports.Neo_Free(ptr, len);
   },
 };
-
-globalThis.libneo = libneo;

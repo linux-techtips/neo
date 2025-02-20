@@ -1,4 +1,4 @@
-import './neo.js'
+import { libneo } from "./neo.js";
 
 const output = document.getElementById("token-text");
 const input = document.getElementById("neo-code-input-box");
