@@ -4,6 +4,8 @@ const Tokenizer = struct {
     const State = enum {
         whitespace,
         newline,
+        string,
+        char,
         number,
         start,
         ident,
@@ -15,8 +17,8 @@ const Tokenizer = struct {
     tokens: []Token = undefined,
     tokenCount: usize = 0,
 
-    begin: usize = 0,
-    index: usize = 0,
+    begin: u32 = 0,
+    index: u32 = 0,
 
     pub fn tokenize(allocator: std.mem.Allocator, source: Source) ![]Token {
         var self = Tokenizer{ .text = source.text() };
@@ -45,6 +47,14 @@ const Tokenizer = struct {
                 '\n' => {
                     self.index = self.begin;
                     continue :state .newline;
+                },
+                '\"' => {
+                    self.index = self.begin;
+                    continue :state .string;
+                },
+                '\'' => {
+                    self.index = self.begin;
+                    continue :state .char;
                 },
                 0 => {
                     // TODO: Handle invalid eof.
@@ -107,6 +117,30 @@ const Tokenizer = struct {
                     continue :state .start;
                 },
             },
+            .string => switch (self.text[self.index]) {
+                // TODO: Handle escaping. Ugh.
+                '\"' => {
+                    self.pushAndReset(.string);
+                    continue :state .start;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .string;
+                },
+            },
+            .char => switch (self.text[self.index]) {
+                // TODO: Handle escaping. Ugh.
+                '\'' => {
+                    const tag: Token.Tag = if (self.index - self.begin > 2) .invalid else .char;
+
+                    self.pushAndReset(tag);
+                    continue :state .start;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .string;
+                },
+            },
         }
 
         return self.shrink(allocator);
@@ -138,6 +172,7 @@ const Tokenizer = struct {
         // TODO: Handle non-resizable allocator like wasm better.
         // The issue being, we don't want to return a slice that points past the valid tokens.
         // We also don't want to return a slice that won't allow us to free the allocated memory if resize fails.
+        // The current behavior is to have the consumer of the tokenizer buffer remember to check for the ending eof. I do not like this.
         return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
 };
@@ -176,6 +211,14 @@ test "tokenize" {
     };
 
     try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
+
+test "tokenize strings" {
+    try std.testing.expect(false);
+}
+
+test "tokenize chars" {
+
 }
 
 pub const tokenize = Tokenizer.tokenize;

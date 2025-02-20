@@ -1,3 +1,6 @@
+// TODO: Error handling when source size greater than std.math.maxInt(u32).
+// Why would you ever need to compile 4 gigs of source code at once???
+
 const std = @import("std");
 
 const Source = @This();
