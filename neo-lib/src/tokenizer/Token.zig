@@ -9,6 +9,7 @@ comptime {
     std.debug.assert(@sizeOf(Token) == 2);
     std.debug.assert(@offsetOf(Token, "tag") == 0);
     std.debug.assert(@offsetOf(Token, "len") == 1);
+    // TODO: Alignment assertions because of ABI stuff. Ugh.
 }
 
 tag: Tag,
