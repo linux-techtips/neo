@@ -62,15 +62,17 @@ usingnamespace if (builtin.target.isWasm()) struct {
         };
     }
 
+    const Tokens = extern struct {
+        ptr: [*]u16,
+        len: usize,
+    };
+
     // TODO: Handle C Pointers.
-    export fn Neo_Tokenize(source_ptr: [*]const u8, source_len: usize) callconv(.C) Slice {
+    export fn Neo_Tokenize(source_ptr: [*]const u8, source_len: usize) callconv(.C) Tokens {
         const source = tokenizer.Source.fromRawBuffer(source_ptr, source_len);
         const tokens = tokenizer.tokenize(allocator, source) catch unreachable;
 
-        return .{
-            .ptr = tokens.ptr,
-            .len = tokens.len,
-        };
+        return .{ .ptr = @alignCast(@ptrCast(tokens.ptr)), .len = tokens.len };
     }
 
     export fn Neo_Token_Name(tag: tokenizer.Token.Tag) callconv(.C) [*:0]const u8 {

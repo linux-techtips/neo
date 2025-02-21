@@ -4,10 +4,13 @@ const Tokenizer = struct {
     const State = enum {
         whitespace,
         newline,
+        string,
+        char,
         number,
         start,
         ident,
         symbol,
+        eof,
     };
 
     text: [:0]const u8,
@@ -15,8 +18,8 @@ const Tokenizer = struct {
     tokens: []Token = undefined,
     tokenCount: usize = 0,
 
-    begin: usize = 0,
-    index: usize = 0,
+    begin: u32 = 0,
+    index: u32 = 0,
 
     pub fn tokenize(allocator: std.mem.Allocator, source: Source) ![]Token {
         var self = Tokenizer{ .text = source.text() };
@@ -26,38 +29,53 @@ const Tokenizer = struct {
 
         state: switch (State.start) {
             .start => switch (self.text[self.begin]) {
-                '(', ')', '{', '}', '[', ']', '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
+                '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
                     self.index = self.begin;
                     continue :state .symbol;
                 },
+                '(', ')', '{', '}', '[', ']' => {
+                    const slice = self.text[self.begin..][0..1];
+                    const symbol = Symbols.lookup(slice).?;
+
+                    self.index += 1;
+                    self.push(symbol);
+                    self.begin += 1;
+
+                    continue :state .start;
+                },
                 'A'...'Z', 'a'...'z', '_' => {
-                    self.index = self.begin;
+                    self.index = self.begin + 1;
                     continue :state .ident;
                 },
                 '\t', '\r', ' ' => {
-                    self.index = self.begin;
+                    self.index = self.begin + 1;
                     continue :state .whitespace;
                 },
                 '0'...'9' => {
-                    self.index = self.begin;
+                    self.index = self.begin + 1;
                     continue :state .number;
                 },
                 '\n' => {
-                    self.index = self.begin;
+                    self.index = self.begin + 1;
                     continue :state .newline;
                 },
-                0 => {
-                    // TODO: Handle invalid eof.
-                    self.push(.eof);
-                    break :state;
+                '\"' => {
+                    self.index = self.begin + 1;
+                    continue :state .string;
+                },
+                '\'' => {
+                    self.index = self.begin + 1;
+                    continue :state .char;
                 },
                 else => {
                     // TODO: Handle
                     self.push(.invalid);
+                    continue :state .eof;
                 },
+                0 => continue :state .eof,
             },
             .symbol => switch (self.text[self.index]) {
-                '(', ')', '{', '}', '[', ']', '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
+                '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
                     self.index += 1;
                     continue :state .symbol;
                 },
@@ -107,6 +125,51 @@ const Tokenizer = struct {
                     continue :state .start;
                 },
             },
+            .string => switch (self.text[self.index]) {
+                // TODO: Handle escaping. Ugh.
+                '\"' => {
+                    self.index += 1;
+                    self.pushAndReset(.string);
+                    continue :state .start;
+                },
+                0 => {
+                    // TODO: We need to denote that invalid tokens that take up the entire buffer have a len of 0.
+                    self.tokens[self.tokenCount] = .{ .tag = .invalid, .len = 0 };
+                    self.tokenCount += 1;
+
+                    continue :state .eof;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .string;
+                },
+            },
+            .char => switch (self.text[self.index]) {
+                // TODO: Handle escaping. Ugh.
+                '\'' => {
+                    const tag: Token.Tag = if (self.index - self.begin > 2) .invalid else .char;
+
+                    self.index += 1;
+                    self.pushAndReset(tag);
+                    continue :state .start;
+                },
+                0 => {
+                    // TODO: We need to denote that invalid tokens that take up the entire buffer have a len of 0.
+                    self.tokens[self.tokenCount] = .{ .tag = .invalid, .len = 0 };
+                    self.tokenCount += 1;
+
+                    continue :state .eof;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .char;
+                },
+            },
+            .eof => {
+                // TODO: Handle invalid eof.
+                self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 0 };
+                break :state;
+            },
         }
 
         return self.shrink(allocator);
@@ -138,6 +201,7 @@ const Tokenizer = struct {
         // TODO: Handle non-resizable allocator like wasm better.
         // The issue being, we don't want to return a slice that points past the valid tokens.
         // We also don't want to return a slice that won't allow us to free the allocated memory if resize fails.
+        // The current behavior is to have the consumer of the tokenizer buffer remember to check for the ending eof. I do not like this.
         return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
 };
@@ -178,6 +242,72 @@ test "tokenize" {
     try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
 }
 
+test "tokenize groupings" {
+    const text = "()";
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .@"(", .len = 1 },
+        .{ .tag = .@")", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
+
+test "tokenize strings" {
+    const text = (
+        \\ "hello" "world"
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .string, .len = 7 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .string, .len = 7 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
+
+test "tokenize chars" {
+    const text = (
+        \\ 'a' '1' '*'
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+}
 pub const tokenize = Tokenizer.tokenize;
 
 pub const Token = @import("tokenizer/Token.zig");

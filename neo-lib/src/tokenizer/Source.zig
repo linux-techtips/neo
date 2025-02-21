@@ -1,3 +1,6 @@
+// TODO: Error handling when source size greater than std.math.maxInt(u32).
+// Why would you ever need to compile 4 gigs of source code at once???
+
 const std = @import("std");
 
 const Source = @This();
@@ -67,7 +70,7 @@ pub fn text(self: *const Source) [:0]const u8 {
 }
 
 pub fn estimatedTokenSize(self: *const Source) usize {
-    return self.buffer.len;
+    return self.buffer.len + 3;
 }
 
 pub fn deinit(self: *const Source, allocator: std.mem.Allocator) void {
