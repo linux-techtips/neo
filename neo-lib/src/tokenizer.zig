@@ -10,6 +10,7 @@ const Tokenizer = struct {
         start,
         ident,
         symbol,
+        invalid,
         eof,
     };
 
@@ -67,12 +68,13 @@ const Tokenizer = struct {
                     self.index = self.begin + 1;
                     continue :state .char;
                 },
-                else => {
-                    // TODO: Handle
-                    self.push(.invalid);
+                0 => {
                     continue :state .eof;
                 },
-                0 => continue :state .eof,
+                else => {
+                    self.index = self.begin + 1;
+                    continue :state .invalid;
+                },
             },
             .symbol => switch (self.text[self.index]) {
                 '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
@@ -128,16 +130,18 @@ const Tokenizer = struct {
             .string => switch (self.text[self.index]) {
                 // TODO: Handle escaping. Ugh.
                 '\"' => {
+                    const tag: Token.Tag = if (self.index - self.begin < 2) .invalid else .string;
+
                     self.index += 1;
-                    self.pushAndReset(.string);
+                    self.pushAndReset(tag);
+
                     continue :state .start;
                 },
-                0 => {
-                    // TODO: We need to denote that invalid tokens that take up the entire buffer have a len of 0.
-                    self.tokens[self.tokenCount] = .{ .tag = .invalid, .len = 0 };
-                    self.tokenCount += 1;
-
-                    continue :state .eof;
+                '\n' => {
+                    // SAFETY: Since the source text is terminated with a newline followed by an eof, we do not need to handle the eof case.
+                    // TODO: Handle overflowing invalid chars.
+                    self.pushAndReset(.invalid);
+                    continue :state .newline;
                 },
                 else => {
                     self.index += 1;
@@ -147,27 +151,43 @@ const Tokenizer = struct {
             .char => switch (self.text[self.index]) {
                 // TODO: Handle escaping. Ugh.
                 '\'' => {
-                    const tag: Token.Tag = if (self.index - self.begin > 2) .invalid else .char;
+                    const tag: Token.Tag = if (self.index - self.begin < 2) .invalid else .char;
 
                     self.index += 1;
                     self.pushAndReset(tag);
+
                     continue :state .start;
                 },
-                0 => {
-                    // TODO: We need to denote that invalid tokens that take up the entire buffer have a len of 0.
-                    self.tokens[self.tokenCount] = .{ .tag = .invalid, .len = 0 };
-                    self.tokenCount += 1;
-
-                    continue :state .eof;
+                '\n' => {
+                    // SAFETY: Since the source text is terminated with a newline followed by an eof, we do not need to handle the eof case.
+                    // TODO: Handle overflowing invalid chars.
+                    self.pushAndReset(.invalid);
+                    continue :state .newline;
                 },
                 else => {
                     self.index += 1;
                     continue :state .char;
                 },
             },
+            .invalid => switch (self.text[self.index]) {
+                ' ', '\t', '\r' => {
+                    self.pushAndReset(.invalid);
+                    continue :state .start;
+                },
+                '\n' => {
+                    self.pushAndReset(.invalid);
+                    continue :state .newline;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .invalid;
+                },
+            },
             .eof => {
                 // TODO: Handle invalid eof.
+                // std.debug.panic("Slice: {s}\n", .{self.text[self.begin..self.index]});
                 self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 0 };
+                self.tokenCount += 1;
                 break :state;
             },
         }
@@ -206,7 +226,7 @@ const Tokenizer = struct {
     }
 };
 
-test "tokenize" {
+test "tokenize expression" {
     const text = (
         \\
         \\ a * b + c + d
@@ -239,7 +259,7 @@ test "tokenize" {
         .{ .tag = .eof, .len = 0 },
     };
 
-    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
 test "tokenize groupings" {
@@ -258,7 +278,7 @@ test "tokenize groupings" {
         .{ .tag = .eof, .len = 0 },
     };
 
-    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
 test "tokenize strings" {
@@ -281,7 +301,7 @@ test "tokenize strings" {
         .{ .tag = .eof, .len = 0 },
     };
 
-    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
 test "tokenize chars" {
@@ -306,7 +326,7 @@ test "tokenize chars" {
         .{ .tag = .eof, .len = 0 },
     };
 
-    try std.testing.expectEqualSlices(Token, tokens, &expected_tokens);
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 pub const tokenize = Tokenizer.tokenize;
 
