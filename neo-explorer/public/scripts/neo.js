@@ -4,7 +4,11 @@ const memory = new WebAssembly.Memory({
 });
 
 const module = await WebAssembly.instantiateStreaming(
-  await fetch("/neo.wasm"),
+  fetch("/neo.wasm", {
+    headers: {
+      "Content-Type": "application/wasm",
+    },
+  }),
   { env: { memory } },
 );
 
