@@ -3,14 +3,12 @@ const memory = new WebAssembly.Memory({
   maximum: 1000,
 });
 
-const module = await WebAssembly.instantiateStreaming(
-  fetch("/neo.wasm", {
-    headers: {
-      "Content-Type": "application/wasm",
-    },
-  }),
-  { env: { memory } },
-);
+const wasm = await fetch("/neo.wasm");
+wasm.headers = { "Content-Type": "application/wasm" };
+
+const module = await WebAssembly.instantiateStreaming(wasm, {
+  env: { memory },
+});
 
 const bigIntToSlice = function (bigInt) {
   return { ptr: Number(bigInt & 0xffffffffn), len: Number(bigInt >> 32n) };
