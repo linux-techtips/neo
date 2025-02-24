@@ -15,7 +15,7 @@
 
     in with pkg; {
       devShells.default = mkShell {
-        packages = [ zig-unstable hyperfine wasmtime wabt ];
+        packages = [ zig-unstable hyperfine wasmtime wabt bun ];
       };
     }
   );
