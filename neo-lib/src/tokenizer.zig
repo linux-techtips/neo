@@ -32,11 +32,21 @@ const Tokenizer = struct {
 
         state: switch (State.start) {
             .start => switch (self.text[self.begin]) {
-                '.', ':', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '=', '<', '>', '~' => {
+                '.', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '<', '>', '~' => {
                     self.index = self.begin;
                     continue :state .symbol;
                 },
                 '(', ')', '{', '}', '[', ']' => {
+                    const slice = self.text[self.begin..][0..1];
+                    const symbol = symbols.lookup(slice).?;
+
+                    self.index += 1;
+                    self.push(symbol);
+                    self.begin += 1;
+
+                    continue :state .start;
+                },
+                ':', '=' => {
                     const slice = self.text[self.begin..][0..1];
                     const symbol = symbols.lookup(slice).?;
 
@@ -330,6 +340,35 @@ test "tokenize chars" {
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
+
+test "tokenize :=, ::" {
+    const text = (
+        \\:: := : =
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .@"=", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"=", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
 pub const tokenize = Tokenizer.tokenize;
 
 pub const Token = extern struct {
