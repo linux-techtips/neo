@@ -5,7 +5,7 @@ const std = @import("std");
 
 const operators = tokenizer.operators;
 
-pub fn parse(allocator: std.mem.Allocator, tokens: []tokenizer.Token) ![]tokenizer.Token {
+pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]tokenizer.Token {
     var tree = try std.ArrayList(tokenizer.Token).initCapacity(allocator, tokens.len);
     errdefer tree.deinit();
 

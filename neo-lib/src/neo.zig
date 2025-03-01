@@ -5,6 +5,8 @@ const Source = @import("Source.zig");
 const builtin = @import("builtin");
 const std = @import("std");
 
+const Token = tokenizer.Token;
+
 const allocator = if (builtin.target.isWasm()) std.heap.wasm_allocator else std.heap.page_allocator;
 
 const Slice = if (builtin.target.isWasm()) packed struct(u64) {
@@ -48,6 +50,16 @@ usingnamespace if (builtin.target.isWasm()) struct {
         });
     }
 
+    export fn Neo_Parse(tokens_ptr: [*]const Token, tokens_len: usize) callconv(.C) u64 {
+        const tokens = tokens_ptr[0..tokens_len];
+        const tree = parser.parse(allocator, tokens) catch unreachable;
+
+        return @bitCast(Slice{
+            .ptr = @intFromPtr(tree.ptr),
+            .len = tree.len,
+        });
+    }
+
     export fn Neo_Token_Name(tag: tokenizer.Token.Tag) callconv(.C) u64 {
         const slice: [:0]const u8 = @tagName(tag);
         return @bitCast(Slice{
@@ -66,7 +78,7 @@ usingnamespace if (builtin.target.isWasm()) struct {
     }
 
     const Tokens = extern struct {
-        ptr: [*]u16,
+        ptr: [*]Token,
         len: usize,
     };
 
@@ -76,6 +88,18 @@ usingnamespace if (builtin.target.isWasm()) struct {
         const tokens = tokenizer.tokenize(allocator, source) catch unreachable;
 
         return .{ .ptr = @alignCast(@ptrCast(tokens.ptr)), .len = tokens.len };
+    }
+
+    const Tree = extern struct {
+        ptr: [*]Token,
+        len: usize,
+    };
+
+    export fn Neo_Parse(tokens_ptr: [*]const Token, tokens_len: usize) callconv(.C) Tree {
+        const tokens = tokens_ptr[0..tokens_len];
+        const tree = parser.parse(allocator, tokens) catch unreachable;
+
+        return .{ .ptr = @alignCast(@ptrCast(tree.ptr)), .len = tree.len };
     }
 
     export fn Neo_Token_Name(tag: tokenizer.Token.Tag) callconv(.C) [*:0]const u8 {
