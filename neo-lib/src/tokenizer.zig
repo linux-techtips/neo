@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const Source = @import("Source.zig");
+
 const Tokenizer = struct {
     const State = enum {
         whitespace,
@@ -36,7 +38,7 @@ const Tokenizer = struct {
                 },
                 '(', ')', '{', '}', '[', ']' => {
                     const slice = self.text[self.begin..][0..1];
-                    const symbol = Symbols.lookup(slice).?;
+                    const symbol = symbols.lookup(slice).?;
 
                     self.index += 1;
                     self.push(symbol);
@@ -82,7 +84,7 @@ const Tokenizer = struct {
                     continue :state .symbol;
                 },
                 else => {
-                    self.pushAndReset(Symbols.lookup(self.text[self.begin..self.index]) orelse .invalid);
+                    self.pushAndReset(symbols.lookup(self.text[self.begin..self.index]) orelse .invalid);
                     continue :state .start;
                 },
             },
@@ -92,7 +94,7 @@ const Tokenizer = struct {
                     continue :state .ident;
                 },
                 else => {
-                    self.pushAndReset(Keywords.lookup(self.text[self.begin..self.index]) orelse .ident);
+                    self.pushAndReset(keywords.lookup(self.text[self.begin..self.index]) orelse .ident);
                     continue :state .start;
                 },
             },
@@ -330,7 +332,71 @@ test "tokenize chars" {
 }
 pub const tokenize = Tokenizer.tokenize;
 
-pub const Token = @import("tokenizer/Token.zig");
-pub const Symbols = @import("tokenizer/Symbols.zig");
-pub const Keywords = @import("tokenizer/Keywords.zig");
-pub const Source = @import("tokenizer/Source.zig");
+pub const Token = extern struct {
+    tag: Tag,
+    len: u8,
+
+    pub const Tag = blk: {
+        const kinds_fields = std.meta.fields(Kinds);
+        const field_size = kinds_fields.len + symbols.Texts.len + keywords.Texts.len;
+        var fields: [field_size]std.builtin.Type.EnumField = undefined;
+
+        var iter: usize = 0;
+
+        for (symbols.Texts) |op| {
+            const hash = symbols.hashSlice(op);
+            const index = symbols.hashToIndex(hash);
+
+            // TODO: Explain why `~` is not used here. Synced with the `Symbols.hashToTag` impl.
+            fields[iter + index] = .{ .name = op ++ "\x00", .value = index };
+        }
+
+        iter += symbols.Texts.len;
+
+        for (keywords.Texts) |kw| {
+            const hash = keywords.hashSlice(kw);
+            const index = keywords.hashToIndex(hash);
+
+            // TODO: Explain why the `~` is used here. Synced with the `Keywords.hashToTag` impl.
+            fields[iter + index] = .{ .name = kw ++ "\x00", .value = ~index };
+        }
+
+        iter += keywords.Texts.len;
+
+        for (kinds_fields, 0..) |kind, i| {
+            fields[iter + i] = kind;
+        }
+
+        break :blk @Type(.{
+            .@"enum" = .{
+                .tag_type = u8,
+                .fields = &fields,
+                .decls = &.{},
+                .is_exhaustive = true,
+            },
+        });
+    };
+
+    pub const Kinds = enum(u8) {
+        // TODO: Explan the whole 128 | thing.
+        // TODO: I would rather have invalid be 0x00.
+        invalid = 0xaa,
+        eof = 128 | @as(u8, 0),
+
+        ident = 128 | @as(u8, 1),
+        builtin = 128 | @as(u8, 9),
+        number = 128 | @as(u8, 17),
+
+        whitespace = 128 | @as(u8, 34),
+        newline = 128 | @as(u8, 35),
+
+        symbol = 128 | @as(u8, 3),
+
+        string = 128 | @as(u8, 4),
+        char = 128 | @as(u8, 19),
+    };
+};
+
+pub const operators = @import("tokenizer/operators.zig");
+pub const keywords = @import("tokenizer/keywords.zig");
+pub const symbols = @import("tokenizer/symbols.zig");

@@ -1,7 +1,8 @@
 const tokenizer = @import("../tokenizer.zig");
+const Source = @import("../Source.zig");
+
 const std = @import("std");
 
-const Source = tokenizer.Source;
 const Token = tokenizer.Token;
 
 pub const Texts = [_][]const u8{
@@ -137,7 +138,7 @@ pub fn indexToTag(index: u8) Token.Tag {
 
 pub fn lookup(text: []const u8) ?Token.Tag {
     // TODO: The unaligned load from `text.ptr[0..8]` doesn't really matter on x86. But on other platforms this could incur a non-insignificant runtime cost.
-    // TODO: See if the compiler is smart and can figure out the nullity of this lookup function will be Tag.Identifier.
+    // TODO: See if the compiler is smart and can figure out the nullity of this lookup function will be Tag.ident.
 
     // Hash the provided key and load the expected value.
     const hash = hashSlice(text);

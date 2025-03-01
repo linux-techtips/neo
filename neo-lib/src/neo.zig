@@ -1,4 +1,7 @@
 const tokenizer = @import("tokenizer.zig");
+const parser = @import("parser.zig");
+const Source = @import("Source.zig");
+
 const builtin = @import("builtin");
 const std = @import("std");
 
@@ -21,14 +24,14 @@ export fn Neo_Free(ptr: [*]const u8, len: usize) callconv(.C) void {
 }
 
 export fn Neo_Source_Free(source_ptr: [*]const u8, source_len: usize) callconv(.C) void {
-    const source = tokenizer.Source.fromRawBuffer(source_ptr, source_len);
+    const source = Source.fromRawBuffer(source_ptr, source_len);
     source.deinit(allocator);
 }
 
 // TODO: The signatures of these functions only slightly differ for now, but in the future, there will be a difference between the wasm and native libraries.
 usingnamespace if (builtin.target.isWasm()) struct {
     export fn Neo_Source_Alloc(text_ptr: [*]const u8, text_len: usize) callconv(.C) u64 {
-        const source = tokenizer.Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
+        const source = Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
         return @bitCast(Slice{
             .ptr = @intFromPtr(source.buffer.ptr),
             .len = source.buffer.len,
@@ -36,7 +39,7 @@ usingnamespace if (builtin.target.isWasm()) struct {
     }
 
     export fn Neo_Tokenize(source_ptr: [*]const u8, source_len: usize) callconv(.C) u64 {
-        const source = tokenizer.Source.fromRawBuffer(source_ptr, source_len);
+        const source = Source.fromRawBuffer(source_ptr, source_len);
         const tokens = tokenizer.tokenize(allocator, source) catch unreachable;
 
         return @bitCast(Slice{
@@ -55,7 +58,7 @@ usingnamespace if (builtin.target.isWasm()) struct {
 } else struct {
     // TODO: Handle C Pointers.
     export fn Neo_Source_Alloc(text_ptr: [*]const u8, text_len: usize) callconv(.C) Slice {
-        const source = tokenizer.Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
+        const source = Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
         return .{
             .ptr = source.buffer.ptr,
             .len = source.buffer.len,
@@ -69,7 +72,7 @@ usingnamespace if (builtin.target.isWasm()) struct {
 
     // TODO: Handle C Pointers.
     export fn Neo_Tokenize(source_ptr: [*]const u8, source_len: usize) callconv(.C) Tokens {
-        const source = tokenizer.Source.fromRawBuffer(source_ptr, source_len);
+        const source = Source.fromRawBuffer(source_ptr, source_len);
         const tokens = tokenizer.tokenize(allocator, source) catch unreachable;
 
         return .{ .ptr = @alignCast(@ptrCast(tokens.ptr)), .len = tokens.len };

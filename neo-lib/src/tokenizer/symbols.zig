@@ -1,7 +1,8 @@
 const tokenizer = @import("../tokenizer.zig");
+const Source = @import("../Source.zig");
+
 const std = @import("std");
 
-const Source = tokenizer.Source;
 const Token = tokenizer.Token;
 
 pub const Texts = [_][]const u8{
@@ -12,7 +13,7 @@ pub const Texts = [_][]const u8{
     "&",  "&=",  "&&",  "|",   "|=", "||",
     "^",  "^=",  "%",   "%=",  "=",  "==",
     "!",  "!=",  "<",   "<=",  ">",  ">=",
-    "<<", "<<=", ">>",  ">>=",
+    "<<", "<<=", ">>",  ">>=", "=>", "~",
 };
 
 // TODO: DRY with Keywords impl.
@@ -91,11 +92,6 @@ const PaddedTexts = blk: {
 
 // TODO: DRY with Keywords impl.
 pub const MaxLen = 4;
-// pub const MaxLen = blk: {
-//     var max = 0;
-//     for (Texts) |op| max = @max(op.len, max);
-//     break :blk max;
-// };
 
 pub fn hashSlice(text: []const u8) u7 {
     // TODO: Credit @validark. Where tf is he finding this??
