@@ -1,9 +1,13 @@
 // TODO: Error handling when source size greater than std.math.maxInt(u32).
 // Why would you ever need to compile 4 gigs of source code at once???
 
+const tokenizer = @import("tokenizer.zig");
 const std = @import("std");
 
+const Token = tokenizer.Token;
 const Source = @This();
+
+pub const Sentinel = @intFromEnum(Token.Kinds.invalid);
 
 // TODO: Handle non-simd targets better.
 pub const Chunk = @Vector(std.simd.suggestVectorLength(u8) orelse @sizeOf(usize), u8);
@@ -12,7 +16,7 @@ pub const ChunkSize = @sizeOf(Chunk);
 
 // TODO: Explain this.
 pub const FrontPad = "\n";
-pub const BackPad = FrontPad ++ "\x00" ** 63;
+pub const BackPad = FrontPad ++ "\x00" ++ [1]u8{Sentinel} ** (@bitSizeOf(usize) - 2);
 
 buffer: [:0]align(ChunkSize) const u8,
 path: []const u8,

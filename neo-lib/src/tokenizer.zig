@@ -312,16 +312,16 @@ pub const Token = extern struct {
         eof = 128 | @as(u8, 0),
 
         ident = 128 | @as(u8, 1),
-        symbol = 128 | @as(u8, 3),
-        builtin = 128 | @as(u8, 9),
-        number = 128 | @as(u8, 17),
+        symbol = 128 | @as(u8, 2),
+        builtin = 128 | @as(u8, 3),
+        number = 128 | @as(u8, 4),
 
-        whitespace = 128 | @as(u8, 34),
-        newline = 128 | @as(u8, 35),
-        comment = 128 | @as(u8, 20),
+        whitespace = 128 | @as(u8, 5),
+        newline = 128 | @as(u8, 6),
+        comment = 128 | @as(u8, 7),
 
-        string = 128 | @as(u8, 4),
-        char = 128 | @as(u8, 19),
+        string = 128 | @as(u8, 8),
+        char = 128 | @as(u8, 9),
     };
 };
 
@@ -456,7 +456,7 @@ test "tokenize :=, ::" {
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
-test "biiiiig token" {
+test "tokenzie biiiiig token" {
     const text = "a" ** 1000;
 
     const source = try Source.fromText(std.testing.allocator, text);
@@ -475,7 +475,7 @@ test "biiiiig token" {
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
-test "comments" {
+test "tokenize comments" {
     const text = (
         \\// Hello Cruel World.
         \\// This is a comment.
