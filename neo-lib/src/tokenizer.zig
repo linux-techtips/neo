@@ -198,7 +198,7 @@ const Tokenizer = struct {
             .eof => {
                 // TODO: Handle invalid eof.
                 // std.debug.panic("Slice: {s}\n", .{self.text[self.begin..self.index]});
-                self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 0 };
+                self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 1 };
                 self.tokenCount += 1;
                 break :state;
             },
@@ -208,20 +208,20 @@ const Tokenizer = struct {
     }
 
     fn push(self: *Tokenizer, tag: Token.Tag) void {
-        const len = self.index - self.begin;
+        // TODO: Gracefully handle the case where the token len exceeds the bounds of u16. "Who would ever need an identifier that large???"
+        const len: u16 = @intCast(self.index - self.begin);
+        std.debug.assert(len != 0);
 
-        // TODO: Fold len info into adjacent tokens with known lengths.
-        // TODO: Figure out how to handle invalid tokenzier state. Maybe ft. Chandler Carruth?
-        const token: Token = if (len > std.math.maxInt(u8)) .{
-            .tag = .invalid,
-            .len = 0,
-        } else .{
+        const token = Token{
             .tag = tag,
-            .len = @intCast(len),
+            .len = if (len > std.math.maxInt(u8)) 0 else @intCast(len),
         };
 
         self.tokens[self.tokenCount] = token;
         self.tokenCount += 1;
+
+        self.tokens[self.tokenCount] = @bitCast(len);
+        self.tokenCount += @intFromBool(token.len == 0);
     }
 
     fn pushAndReset(self: *Tokenizer, tag: Token.Tag) void {
@@ -268,7 +268,7 @@ test "tokenize expression" {
         .{ .tag = .whitespace, .len = 1 },
         .{ .tag = .ident, .len = 1 },
         .{ .tag = .newline, .len = 2 },
-        .{ .tag = .eof, .len = 0 },
+        .{ .tag = .eof, .len = 1 },
     };
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
@@ -287,7 +287,7 @@ test "tokenize groupings" {
         .{ .tag = .@"(", .len = 1 },
         .{ .tag = .@")", .len = 1 },
         .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
+        .{ .tag = .eof, .len = 1 },
     };
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
@@ -310,7 +310,7 @@ test "tokenize strings" {
         .{ .tag = .whitespace, .len = 1 },
         .{ .tag = .string, .len = 7 },
         .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
+        .{ .tag = .eof, .len = 1 },
     };
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
@@ -335,7 +335,7 @@ test "tokenize chars" {
         .{ .tag = .whitespace, .len = 1 },
         .{ .tag = .char, .len = 3 },
         .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
+        .{ .tag = .eof, .len = 1 },
     };
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
@@ -363,7 +363,26 @@ test "tokenize :=, ::" {
         .{ .tag = .whitespace, .len = 1 },
         .{ .tag = .@"=", .len = 1 },
         .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "biiiiig token" {
+    const text = "a" ** 1000;
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .ident, .len = 0 },
+        @bitCast(@as(u16, 1000)),
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
     };
 
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
@@ -439,3 +458,5 @@ pub const Token = extern struct {
 pub const operators = @import("tokenizer/operators.zig");
 pub const keywords = @import("tokenizer/keywords.zig");
 pub const symbols = @import("tokenizer/symbols.zig");
+
+pub const Cursor = @import("cursor.zig").Cursor;
