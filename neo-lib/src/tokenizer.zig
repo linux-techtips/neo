@@ -5,6 +5,7 @@ const Source = @import("Source.zig");
 const Tokenizer = struct {
     const State = enum {
         whitespace,
+        comment,
         newline,
         string,
         char,
@@ -32,7 +33,7 @@ const Tokenizer = struct {
 
         state: switch (State.start) {
             .start => switch (self.text[self.begin]) {
-                '.', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '<', '>', '~' => {
+                '.', ',', '?', '+', '-', '*', '%', '^', '&', '|', '!', '<', '>', '~' => {
                     self.index = self.begin;
                     continue :state .symbol;
                 },
@@ -67,6 +68,15 @@ const Tokenizer = struct {
                 '0'...'9' => {
                     self.index = self.begin + 1;
                     continue :state .number;
+                },
+                '/' => {
+                    if (self.text[self.begin + 1] == '/') {
+                        self.index = self.begin + 2;
+                        continue :state .comment;
+                    } else {
+                        self.index = self.begin + 1;
+                        continue :state .symbol;
+                    }
                 },
                 '\n' => {
                     self.index = self.begin + 1;
@@ -127,6 +137,18 @@ const Tokenizer = struct {
                 else => {
                     self.pushAndReset(.number);
                     continue :state .start;
+                },
+            },
+            .comment => switch (self.text[self.index]) {
+                '\n' => {
+                    self.pushAndReset(.comment);
+
+                    self.index = self.begin + 1;
+                    continue :state .newline;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .comment;
                 },
             },
             .newline => switch (self.text[self.index]) {
@@ -236,6 +258,71 @@ const Tokenizer = struct {
         // The current behavior is to have the consumer of the tokenizer buffer remember to check for the ending eof. I do not like this.
         return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
+};
+
+pub const Token = extern struct {
+    tag: Tag,
+    len: u8,
+
+    pub const Tag = blk: {
+        const kinds_fields = std.meta.fields(Kinds);
+        const field_size = kinds_fields.len + symbols.Texts.len + keywords.Texts.len;
+        var fields: [field_size]std.builtin.Type.EnumField = undefined;
+
+        var iter: usize = 0;
+
+        for (symbols.Texts) |op| {
+            const hash = symbols.hashSlice(op);
+            const index = symbols.hashToIndex(hash);
+
+            // TODO: Explain why `~` is not used here. Synced with the `Symbols.hashToTag` impl.
+            fields[iter + index] = .{ .name = op ++ "\x00", .value = index };
+        }
+
+        iter += symbols.Texts.len;
+
+        for (keywords.Texts) |kw| {
+            const hash = keywords.hashSlice(kw);
+            const index = keywords.hashToIndex(hash);
+
+            // TODO: Explain why the `~` is used here. Synced with the `Keywords.hashToTag` impl.
+            fields[iter + index] = .{ .name = kw ++ "\x00", .value = ~index };
+        }
+
+        iter += keywords.Texts.len;
+
+        for (kinds_fields, 0..) |kind, i| {
+            fields[iter + i] = kind;
+        }
+
+        break :blk @Type(.{
+            .@"enum" = .{
+                .tag_type = u8,
+                .fields = &fields,
+                .decls = &.{},
+                .is_exhaustive = true,
+            },
+        });
+    };
+
+    pub const Kinds = enum(u8) {
+        // TODO: Explan the whole 128 | thing.
+        // TODO: I would rather have invalid be 0x00.
+        invalid = 0xaa,
+        eof = 128 | @as(u8, 0),
+
+        ident = 128 | @as(u8, 1),
+        symbol = 128 | @as(u8, 3),
+        builtin = 128 | @as(u8, 9),
+        number = 128 | @as(u8, 17),
+
+        whitespace = 128 | @as(u8, 34),
+        newline = 128 | @as(u8, 35),
+        comment = 128 | @as(u8, 20),
+
+        string = 128 | @as(u8, 4),
+        char = 128 | @as(u8, 19),
+    };
 };
 
 test "tokenize expression" {
@@ -388,75 +475,36 @@ test "biiiiig token" {
     try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
 }
 
-pub const tokenize = Tokenizer.tokenize;
+test "comments" {
+    const text = (
+        \\// Hello Cruel World.
+        \\// This is a comment.
+        \\"This is not a comment"
+        \\// This is another comment.
+    );
 
-pub const Token = extern struct {
-    tag: Tag,
-    len: u8,
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
 
-    pub const Tag = blk: {
-        const kinds_fields = std.meta.fields(Kinds);
-        const field_size = kinds_fields.len + symbols.Texts.len + keywords.Texts.len;
-        var fields: [field_size]std.builtin.Type.EnumField = undefined;
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
 
-        var iter: usize = 0;
-
-        for (symbols.Texts) |op| {
-            const hash = symbols.hashSlice(op);
-            const index = symbols.hashToIndex(hash);
-
-            // TODO: Explain why `~` is not used here. Synced with the `Symbols.hashToTag` impl.
-            fields[iter + index] = .{ .name = op ++ "\x00", .value = index };
-        }
-
-        iter += symbols.Texts.len;
-
-        for (keywords.Texts) |kw| {
-            const hash = keywords.hashSlice(kw);
-            const index = keywords.hashToIndex(hash);
-
-            // TODO: Explain why the `~` is used here. Synced with the `Keywords.hashToTag` impl.
-            fields[iter + index] = .{ .name = kw ++ "\x00", .value = ~index };
-        }
-
-        iter += keywords.Texts.len;
-
-        for (kinds_fields, 0..) |kind, i| {
-            fields[iter + i] = kind;
-        }
-
-        break :blk @Type(.{
-            .@"enum" = .{
-                .tag_type = u8,
-                .fields = &fields,
-                .decls = &.{},
-                .is_exhaustive = true,
-            },
-        });
+    const expected_tokens = [_]Token{
+        .{ .tag = .comment, .len = 21 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .comment, .len = 21 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .string, .len = 23 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .comment, .len = 27 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
     };
 
-    pub const Kinds = enum(u8) {
-        // TODO: Explan the whole 128 | thing.
-        // TODO: I would rather have invalid be 0x00.
-        invalid = 0xaa,
-        eof = 128 | @as(u8, 0),
-
-        ident = 128 | @as(u8, 1),
-        builtin = 128 | @as(u8, 9),
-        number = 128 | @as(u8, 17),
-
-        whitespace = 128 | @as(u8, 34),
-        newline = 128 | @as(u8, 35),
-
-        symbol = 128 | @as(u8, 3),
-
-        string = 128 | @as(u8, 4),
-        char = 128 | @as(u8, 19),
-    };
-};
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
 
 pub const operators = @import("tokenizer/operators.zig");
 pub const keywords = @import("tokenizer/keywords.zig");
 pub const symbols = @import("tokenizer/symbols.zig");
-
-pub const Cursor = @import("cursor.zig").Cursor;
+pub const tokenize = Tokenizer.tokenize;
