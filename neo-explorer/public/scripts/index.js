@@ -34,6 +34,7 @@ const handleTokenize = function (text) {
       tokens.ptr,
       tokens.len,
     );
+
     const byteBuffer = new Uint8Array(
       tokenBuffer.buffer,
       tokenBuffer.byteOffset,
@@ -42,7 +43,12 @@ const handleTokenize = function (text) {
 
     let outputText = "";
     for (let i = 0; i < byteBuffer.length; i += 2) {
-      const [tag, len] = [byteBuffer[i], byteBuffer[i + 1]];
+      let [tag, len] = [byteBuffer[i], byteBuffer[i + 1]];
+      if (len == 0) {
+        len = tokenBuffer[i / 2 + 1];
+        i += 2;
+      }
+
       outputText += `Token { ${libneo.token_name(tag)}, ${len} }\n`;
 
       // TODO: Remove hardcoded eof check.
