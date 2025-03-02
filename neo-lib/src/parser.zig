@@ -18,6 +18,14 @@ pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]t
     var idx = tokens.len - 1;
     while (true) : (idx -= 1) {
         const cur = tokens[idx];
+
+        const lookahead = if (idx > 0) tokens[idx - 1] else cur;
+        if (lookahead.len == 0) {
+            try tree.append(cur);
+            if (idx == 0) break;
+            continue;
+        }
+
         switch (operators.classify(cur)) {
             .unary_prefix => try stack.append(cur),
             .unary_postfix => {
@@ -53,11 +61,9 @@ pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]t
     return tree.allocatedSlice();
 }
 
-test "prefix" {
+test "parse prefix expression" {
     const text = (
-        \\ add : fn(x: u32, y: u32) : {
-        \\   x + y
-        \\ }
+        \\(a+y)*(b-c)/d+e
     );
 
     const source = try Source.fromText(std.testing.allocator, text);
@@ -68,4 +74,61 @@ test "prefix" {
 
     const tree = try parse(std.testing.allocator, tokens);
     defer std.testing.allocator.free(tree);
+
+    const expected_tree = [_]tokenizer.Token{
+        .{ .tag = .eof, .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@")", .len = 1 },
+        .{ .tag = .@"/", .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"-", .len = 1 },
+        .{ .tag = .@"(", .len = 1 },
+        .{ .tag = .@"*", .len = 1 },
+        .{ .tag = .@")", .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .@"(", .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(tokenizer.Token, &expected_tree, tree);
+}
+
+test "parse biiig token" {
+    const text = "a" ** 500 ++ "\n" ++ (
+        \\ x + y + z
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const tree = try parse(std.testing.allocator, tokens);
+    defer std.testing.allocator.free(tree);
+
+    const expected_tree = [_]tokenizer.Token{
+        .{ .tag = .eof, .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        @bitCast(@as(u16, 500)),
+        .{ .tag = .ident, .len = 0 },
+    };
+
+    try std.testing.expectEqualSlices(tokenizer.Token, &expected_tree, tree);
 }
