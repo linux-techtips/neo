@@ -21,13 +21,10 @@ pub const BackPad = FrontPad ++ "\x00" ++ [1]u8{Sentinel} ** (@bitSizeOf(usize) 
 buffer: [:0]align(ChunkSize) const u8,
 path: []const u8,
 
-_alloc_len: usize = undefined,
-
 pub fn fromRawBuffer(ptr: [*]const u8, len: usize) Source {
     return .{
         .buffer = @alignCast(ptr[0..len :0]),
         .path = "(anonymous)",
-        ._alloc_len = len,
     };
 }
 
@@ -69,7 +66,6 @@ pub fn fromText(allocator: std.mem.Allocator, source: [:0]const u8) !Source {
     return .{
         .buffer = buffer[0 .. FrontPad.len + source.len + 1 :0],
         .path = "(anonymous)",
-        ._alloc_len = buffer.len,
     };
 }
 
@@ -82,6 +78,5 @@ pub fn estimatedTokenSize(self: *const Source) usize {
 }
 
 pub fn deinit(self: *const Source, allocator: std.mem.Allocator) void {
-    // allocator.free(self.buffer.ptr[0..std.mem.alignForward(usize, self.buffer.len + BackPad.len, ChunkSize)]);
-    allocator.free(self.buffer.ptr[0..self._alloc_len]);
+    allocator.free(self.buffer.ptr[0..std.mem.alignForward(usize, self.buffer.len + BackPad.len - 1, ChunkSize)]);
 }
