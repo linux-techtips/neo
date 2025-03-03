@@ -100,7 +100,10 @@ pub fn hashSlice(text: []const u8) u7 {
     // Since we can guarantee that every keyword's first and last two characters are unique, we can use them as a hash.
     // However, for our unique hash table, we must map the unique 32-bits of our keywords to a unique 7-bits.
     // This does introduce the ability for hash collisions for unique keywords, but this can be caught at comptime.
-    std.debug.assert(text.len > 0 and text.len <= MaxLen);
+
+    if (@inComptime()) {
+        std.debug.assert(text.len > 0 and text.len <= MaxLen);
+    }
 
     const span = if (@inComptime())
         // At compile time, we know that the text must have a length of at least two.

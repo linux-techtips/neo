@@ -5,6 +5,7 @@ const Source = @import("Source.zig");
 const Tokenizer = struct {
     const State = enum {
         whitespace,
+        comment,
         newline,
         string,
         char,
@@ -32,7 +33,7 @@ const Tokenizer = struct {
 
         state: switch (State.start) {
             .start => switch (self.text[self.begin]) {
-                '.', ',', '?', '+', '-', '*', '/', '%', '^', '&', '|', '!', '<', '>', '~' => {
+                '.', ',', '?', '+', '-', '*', '%', '^', '&', '|', '!', '<', '>', '~' => {
                     self.index = self.begin;
                     continue :state .symbol;
                 },
@@ -67,6 +68,15 @@ const Tokenizer = struct {
                 '0'...'9' => {
                     self.index = self.begin + 1;
                     continue :state .number;
+                },
+                '/' => {
+                    if (self.text[self.begin + 1] == '/') {
+                        self.index = self.begin + 2;
+                        continue :state .comment;
+                    } else {
+                        self.index = self.begin + 1;
+                        continue :state .symbol;
+                    }
                 },
                 '\n' => {
                     self.index = self.begin + 1;
@@ -127,6 +137,18 @@ const Tokenizer = struct {
                 else => {
                     self.pushAndReset(.number);
                     continue :state .start;
+                },
+            },
+            .comment => switch (self.text[self.index]) {
+                '\n' => {
+                    self.pushAndReset(.comment);
+
+                    self.index = self.begin + 1;
+                    continue :state .newline;
+                },
+                else => {
+                    self.index += 1;
+                    continue :state .comment;
                 },
             },
             .newline => switch (self.text[self.index]) {
@@ -198,7 +220,7 @@ const Tokenizer = struct {
             .eof => {
                 // TODO: Handle invalid eof.
                 // std.debug.panic("Slice: {s}\n", .{self.text[self.begin..self.index]});
-                self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 0 };
+                self.tokens[self.tokenCount] = .{ .tag = .eof, .len = 1 };
                 self.tokenCount += 1;
                 break :state;
             },
@@ -208,20 +230,20 @@ const Tokenizer = struct {
     }
 
     fn push(self: *Tokenizer, tag: Token.Tag) void {
-        const len = self.index - self.begin;
+        // TODO: Gracefully handle the case where the token len exceeds the bounds of u16. "Who would ever need an identifier that large???"
+        const len: u16 = @intCast(self.index - self.begin);
+        std.debug.assert(len != 0);
 
-        // TODO: Fold len info into adjacent tokens with known lengths.
-        // TODO: Figure out how to handle invalid tokenzier state. Maybe ft. Chandler Carruth?
-        const token: Token = if (len > std.math.maxInt(u8)) .{
-            .tag = .invalid,
-            .len = 0,
-        } else .{
+        const token = Token{
             .tag = tag,
-            .len = @intCast(len),
+            .len = if (len > std.math.maxInt(u8)) 0 else @intCast(len),
         };
 
         self.tokens[self.tokenCount] = token;
         self.tokenCount += 1;
+
+        self.tokens[self.tokenCount] = @bitCast(len);
+        self.tokenCount += @intFromBool(token.len == 0);
     }
 
     fn pushAndReset(self: *Tokenizer, tag: Token.Tag) void {
@@ -237,139 +259,6 @@ const Tokenizer = struct {
         return self.tokens[0..if (allocator.resize(self.tokens, self.tokenCount)) self.tokenCount else self.tokens.len];
     }
 };
-
-test "tokenize expression" {
-    const text = (
-        \\
-        \\ a * b + c + d
-        \\
-    );
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .ident, .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@"*", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .ident, .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@"+", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .ident, .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@"+", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .ident, .len = 1 },
-        .{ .tag = .newline, .len = 2 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
-}
-
-test "tokenize groupings" {
-    const text = "()";
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .@"(", .len = 1 },
-        .{ .tag = .@")", .len = 1 },
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
-}
-
-test "tokenize strings" {
-    const text = (
-        \\ "hello" "world"
-    );
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .string, .len = 7 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .string, .len = 7 },
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
-}
-
-test "tokenize chars" {
-    const text = (
-        \\ 'a' '1' '*'
-    );
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .char, .len = 3 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .char, .len = 3 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .char, .len = 3 },
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
-}
-
-test "tokenize :=, ::" {
-    const text = (
-        \\:: := : =
-    );
-
-    const source = try Source.fromText(std.testing.allocator, text);
-    defer source.deinit(std.testing.allocator);
-
-    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
-    defer std.testing.allocator.free(tokens);
-
-    const expected_tokens = [_]Token{
-        .{ .tag = .@":", .len = 1 },
-        .{ .tag = .@":", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@":", .len = 1 },
-        .{ .tag = .@"=", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@":", .len = 1 },
-        .{ .tag = .whitespace, .len = 1 },
-        .{ .tag = .@"=", .len = 1 },
-        .{ .tag = .newline, .len = 1 },
-        .{ .tag = .eof, .len = 0 },
-    };
-
-    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
-}
-
-pub const tokenize = Tokenizer.tokenize;
 
 pub const Token = extern struct {
     tag: Tag,
@@ -423,19 +312,199 @@ pub const Token = extern struct {
         eof = 128 | @as(u8, 0),
 
         ident = 128 | @as(u8, 1),
-        builtin = 128 | @as(u8, 9),
-        number = 128 | @as(u8, 17),
+        symbol = 128 | @as(u8, 2),
+        builtin = 128 | @as(u8, 3),
+        number = 128 | @as(u8, 4),
 
-        whitespace = 128 | @as(u8, 34),
-        newline = 128 | @as(u8, 35),
+        whitespace = 128 | @as(u8, 5),
+        newline = 128 | @as(u8, 6),
+        comment = 128 | @as(u8, 7),
 
-        symbol = 128 | @as(u8, 3),
-
-        string = 128 | @as(u8, 4),
-        char = 128 | @as(u8, 19),
+        string = 128 | @as(u8, 8),
+        char = 128 | @as(u8, 9),
     };
 };
+
+test "tokenize expression" {
+    const text = (
+        \\
+        \\ a * b + c + d
+        \\
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"*", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"+", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .ident, .len = 1 },
+        .{ .tag = .newline, .len = 2 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenize groupings" {
+    const text = "()";
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .@"(", .len = 1 },
+        .{ .tag = .@")", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenize strings" {
+    const text = (
+        \\ "hello" "world"
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .string, .len = 7 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .string, .len = 7 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenize chars" {
+    const text = (
+        \\ 'a' '1' '*'
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .char, .len = 3 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenize :=, ::" {
+    const text = (
+        \\:: := : =
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .@"=", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@":", .len = 1 },
+        .{ .tag = .whitespace, .len = 1 },
+        .{ .tag = .@"=", .len = 1 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenzie biiiiig token" {
+    const text = "a" ** 1000;
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .ident, .len = 0 },
+        @bitCast(@as(u16, 1000)),
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
+
+test "tokenize comments" {
+    const text = (
+        \\// Hello Cruel World.
+        \\// This is a comment.
+        \\"This is not a comment"
+        \\// This is another comment.
+    );
+
+    const source = try Source.fromText(std.testing.allocator, text);
+    defer source.deinit(std.testing.allocator);
+
+    const tokens = try Tokenizer.tokenize(std.testing.allocator, source);
+    defer std.testing.allocator.free(tokens);
+
+    const expected_tokens = [_]Token{
+        .{ .tag = .comment, .len = 21 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .comment, .len = 21 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .string, .len = 23 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .comment, .len = 27 },
+        .{ .tag = .newline, .len = 1 },
+        .{ .tag = .eof, .len = 1 },
+    };
+
+    try std.testing.expectEqualSlices(Token, &expected_tokens, tokens);
+}
 
 pub const operators = @import("tokenizer/operators.zig");
 pub const keywords = @import("tokenizer/keywords.zig");
 pub const symbols = @import("tokenizer/symbols.zig");
+pub const tokenize = Tokenizer.tokenize;
