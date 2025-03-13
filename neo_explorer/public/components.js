@@ -1,5 +1,7 @@
 import { Neo } from "./neo.js";
 
+const neo = new Neo();
+
 export const Window = class extends HTMLElement {};
 
 export const Output = class extends HTMLElement {
@@ -7,21 +9,24 @@ export const Output = class extends HTMLElement {
     super();
   }
 
-  connectedCallback() {}
+  connectedCallback() {
+    this.code = this.querySelector("code");
+
+    neo.onemit = (output) => (this.code.innerHTML = output);
+  }
 };
 
 export const Editor = class extends HTMLElement {
   constructor() {
     super();
+
+    this.mode = "tokenize";
   }
 
   connectedCallback() {
-    this.text = this.querySelector(".editor-text");
+    this.text = this.querySelector("textarea");
 
-    this.text.oninput = (event) => this.handleInput(event);
+    neo.onmodechange = (mode) => neo.emit(this.text.value, (this.mode = mode));
+    this.text.oninput = () => neo.emit(this.text.value, this.mode);
   }
-
-  handleInput(event) {}
-
-  render() {}
 };

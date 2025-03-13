@@ -57,16 +57,25 @@ export const libneo = {
 
 export const Neo = class {
   constructor() {
-    this.listeners = new Set();
+    this.emitListeners = new Set();
+    this.modeListeners = new Set();
   }
 
   set onemit(listener) {
-    this.listeners.add(listener);
+    this.emitListeners.add(listener);
+  }
+
+  set onmodechange(listener) {
+    this.modeListeners.add(listener);
+  }
+
+  changeMode(mode) {
+    this.modeListeners.forEach((listener) => listener(mode));
   }
 
   emit(text, mode) {
     const output = !text ? "" : this.handleEmit(text, mode);
-    this.listeners.forEach((listener) => listener(output));
+    this.emitListeners.forEach((listener) => listener(output));
   }
 
   handleEmit(text, mode) {

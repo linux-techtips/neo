@@ -1,9 +1,5 @@
 const std = @import("std");
 
-const BuildError = error{
-    bad_bundle_asset,
-};
-
 pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
@@ -19,8 +15,6 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .name = "neo-explorer",
     });
-
-    b.installArtifact(neo_explorer);
 
     const neo_lib_dep = b.dependency("neo_lib", .{
         .optimize = optimize,
@@ -48,7 +42,17 @@ pub fn build(b: *std.Build) !void {
     const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
     neo_explorer.step.dependOn(&bundle_cmd.step);
 
-    _ = bundle_cmd.captureStdOut();
+    b.getInstallStep().dependOn(&neo_explorer.step);
+
+    const run_cmd = b.addRunArtifact(neo_explorer);
+    run_cmd.step.dependOn(b.getInstallStep());
+
+    if (b.args) |args| {
+        run_cmd.addArgs(args);
+    }
+
+    const run_step = b.step("run", "Run the server");
+    run_step.dependOn(&run_cmd.step);
 
     var dir = try std.fs.cwd().openDir("zig-out/bundle", .{ .iterate = true });
     defer dir.close();
@@ -62,14 +66,4 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path(path),
         });
     }
-
-    const run_cmd = b.addRunArtifact(neo_explorer);
-    run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const run_step = b.step("run", "Run the server");
-    run_step.dependOn(&run_cmd.step);
 }
