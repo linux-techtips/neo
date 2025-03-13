@@ -8,6 +8,10 @@
             .version = "0.0.0",
             .path = "../neo_lib",
         },
+        .httpz = .{
+            .url = "git+https://github.com/karlseguin/http.zig?ref=master#56258131ef4505543fef5484451867c13c5ff322",
+            .hash = "httpz-0.0.0-PNVzrJSuBgDFvO7mtd2qDzaq8_hXIu1BqFuL1jwAV8Ac",
+        },
     },
 
     .paths = .{

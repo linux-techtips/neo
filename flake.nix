@@ -10,7 +10,7 @@
 
     in with pkg; {
       devShells.default = mkShell {
-        packages = [ hyperfine wasmtime wabt bun ];
+        packages = [ hyperfine wasmtime wabt ];
       };
     }
   );
