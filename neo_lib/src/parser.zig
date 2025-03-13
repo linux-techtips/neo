@@ -30,13 +30,13 @@ pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]t
             .unary_prefix => try stack.append(cur),
             .unary_postfix => {
                 try tree.append(cur);
-                while (stack.popOrNull()) |top| {
+                while (stack.pop()) |top| {
                     try tree.append(top);
                     if (top.tag == .@")") break;
                 }
             },
             .reset => {
-                while (stack.popOrNull()) |top| {
+                while (stack.pop()) |top| {
                     try tree.append(top);
                     if (top.tag == .@")") break;
                 }
@@ -45,7 +45,7 @@ pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]t
             .binary => {
                 while (true) if (stack.getLastOrNull()) |top| {
                     if (operators.precedence(top) < operators.precedence(cur)) break;
-                    try tree.append(stack.pop());
+                    try tree.append(stack.pop().?);
                 } else break;
                 try stack.append(cur);
             },
@@ -55,7 +55,7 @@ pub fn parse(allocator: std.mem.Allocator, tokens: []const tokenizer.Token) ![]t
         if (idx == 0) break;
     }
 
-    while (stack.popOrNull()) |cur| try tree.append(cur);
+    while (stack.pop()) |cur| try tree.append(cur);
 
     std.debug.assert(tree.items.len == tokens.len);
     return tree.allocatedSlice();

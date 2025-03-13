@@ -7,7 +7,7 @@ pub fn build(b: *std.Build) void {
     const wasm_pages_max = b.option(u64, "wasm-pages-max", "Set the maximum number of pages accessible by wasm") orelse 1000;
     const wasm_pages_min = b.option(u64, "wasm-pages-min", "Set the minimum number of pages accessible by wasm") orelse 100;
 
-    const neo_lib_dep = b.dependency("neo-lib", .{
+    const neo_lib_dep = b.dependency("neo_lib", .{
         .optimize = optimize,
         .target = target,
         .@"wasm-pages-max" = wasm_pages_max,
@@ -20,6 +20,8 @@ pub fn build(b: *std.Build) void {
         // TODO: This should not be hard-coded.
         .dest_dir = .{ .override = .{ .custom = "../public" } },
     });
+
+    b.default_step.dependOn(&neo_lib_install.step);
 
     const run_cmd = b.addSystemCommand(&.{ "bun", "run", "server.js" });
     run_cmd.step.dependOn(&neo_lib_install.step);

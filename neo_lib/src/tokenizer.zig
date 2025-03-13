@@ -124,7 +124,8 @@ const Tokenizer = struct {
                     continue :state .whitespace;
                 },
                 else => {
-                    self.pushAndReset(.whitespace);
+                    // self.pushAndReset(.whitespace);
+                    self.begin = self.index;
                     continue :state .start;
                 },
             },

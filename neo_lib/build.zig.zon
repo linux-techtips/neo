@@ -1,6 +1,8 @@
 .{
-    .name = "neo-lib",
+    .name = .neo_lib,
     .version = "0.0.0",
+    .fingerprint = 0xc09e6b998ce43787,
+    .minimum_zig_version = "0.14.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",

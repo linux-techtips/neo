@@ -7,9 +7,9 @@ const std = @import("std");
 
 const Token = tokenizer.Token;
 
-const allocator = if (builtin.target.isWasm()) std.heap.wasm_allocator else std.heap.page_allocator;
+const allocator = if (builtin.cpu.arch.isWasm()) std.heap.wasm_allocator else std.heap.page_allocator;
 
-const Slice = if (builtin.target.isWasm()) packed struct(u64) {
+const Slice = if (builtin.cpu.arch.isWasm()) packed struct(u64) {
     ptr: u32,
     len: u32,
 } else extern struct {
@@ -31,7 +31,7 @@ export fn Neo_Source_Free(source_ptr: [*]const u8, source_len: usize) callconv(.
 }
 
 // TODO: The signatures of these functions only slightly differ for now, but in the future, there will be a difference between the wasm and native libraries.
-usingnamespace if (builtin.target.isWasm()) struct {
+usingnamespace if (builtin.cpu.arch.isWasm()) struct {
     export fn Neo_Source_Alloc(text_ptr: [*]const u8, text_len: usize) callconv(.C) u64 {
         const source = Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
         return @bitCast(Slice{
