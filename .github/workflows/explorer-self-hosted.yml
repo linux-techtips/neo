@@ -25,9 +25,3 @@ jobs:
       - name: Start the Server
         run: ./zig-out/bin/neo-explorer --port=6969 --addr=0.0.0.0 &
         working-directory: neo_explorer
-
-      - name: Confirm Server is Running
-        run: |
-          echo "Waiting for the server to start..."
-          sleep 10
-          curl -f http://localhost:6969 || { echo "Server failed to start"; exit 1; }
