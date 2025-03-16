@@ -38,13 +38,9 @@ pub fn build(b: *std.Build) !void {
 
     neo_explorer.root_module.addImport("httpz", httpz.module("httpz"));
 
-<<<<<<< HEAD
     // TODO: Yet another bun feature I cannot use because it is undercooked.
     // https://github.com/oven-sh/bun/issues/16335
     const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
-=======
-    const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "--minify", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
->>>>>>> ec48a873ac8d3aa5ccef9b67a9147d1884ed0f93
     // Thank you random ass undocumented stupid build flag that no one ever talks about that actually makes the build command run.
     bundle_cmd.has_side_effects = true;
     _ = bundle_cmd.captureStdOut();
