@@ -1,0 +1,23 @@
+on:
+  push:
+    branches:
+      - main
+      
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v2
+
+      - name: Change directory to neo_explorer
+        run: cd neo_explorer
+
+      - name: Run Zig Build
+        run: zig build run -Doptimize=ReleaseFast -- --port=6969 --addr=0.0.0.0
+        working-directory: neo-explorer
