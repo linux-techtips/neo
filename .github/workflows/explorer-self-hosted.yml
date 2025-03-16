@@ -23,5 +23,5 @@ jobs:
         working-directory: neo_explorer
 
       - name: Start the Server
-        run: screen -dmS ./zig-out/bin/neo-explorer --port=6969 --addr=0.0.0.0
+        run: screen -dmS neo_explorer ./zig-out/bin/neo-explorer --port=6969 --addr=0.0.0.0
         working-directory: neo_explorer
