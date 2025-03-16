@@ -20,4 +20,4 @@ jobs:
 
       - name: Run Zig Build
         run: zig build run -Doptimize=ReleaseFast -- --port=6969 --addr=0.0.0.0
-        working-directory: neo-explorer
+        working-directory: neo_explorer
