@@ -26,7 +26,6 @@ pub fn build(b: *std.Build) !void {
 
     const neo_lib_artifact = neo_lib_dep.artifact("neo");
     const neo_lib_install = b.addInstallArtifact(neo_lib_artifact, .{
-        // TODO: This should not be hard-coded.
         .dest_dir = .{ .override = .{ .custom = "bundle" } },
     });
 
@@ -39,10 +38,15 @@ pub fn build(b: *std.Build) !void {
 
     neo_explorer.root_module.addImport("httpz", httpz.module("httpz"));
 
+    // TODO: Yet another bun feature I cannot use because it is undercooked.
+    // https://github.com/oven-sh/bun/issues/16335
     const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
-    neo_explorer.step.dependOn(&bundle_cmd.step);
+    // Thank you random ass undocumented stupid build flag that no one ever talks about that actually makes the build command run.
+    bundle_cmd.has_side_effects = true;
+    _ = bundle_cmd.captureStdOut();
 
-    b.getInstallStep().dependOn(&neo_explorer.step);
+    neo_explorer.step.dependOn(&bundle_cmd.step);
+    b.installArtifact(neo_explorer);
 
     const run_cmd = b.addRunArtifact(neo_explorer);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -54,15 +58,9 @@ pub fn build(b: *std.Build) !void {
     const run_step = b.step("run", "Run the server");
     run_step.dependOn(&run_cmd.step);
 
-    var dir = try std.fs.cwd().openDir("zig-out/bundle", .{ .iterate = true });
-    defer dir.close();
-
-    var walker = try dir.walk(b.allocator);
-    defer walker.deinit();
-
-    while (try walker.next()) |entry| {
-        const path = try std.fs.path.join(b.allocator, &.{ "zig-out/bundle", entry.path });
-        neo_explorer.root_module.addAnonymousImport(entry.path, .{
+    inline for (.{ "index.html", "index.css", "index.js", "neo.wasm" }) |entry| {
+        const path = try std.fs.path.join(b.allocator, &.{ "zig-out/bundle", entry });
+        neo_explorer.root_module.addAnonymousImport(entry, .{
             .root_source_file = b.path(path),
         });
     }

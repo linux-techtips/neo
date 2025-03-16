@@ -1,36 +1,250 @@
+@import "./styles/icons.css";
+
+:root {
+    --bg-color: #262626;
+    --border-color: color-mix(in srgb, var(--bg-color), white 10%);
+
+    --text-family: "Space Grotesk", sans-serif;
+    --text-color: #f4f4f4;
+    --text-size: 20px;
+
+    --padding: 10px;
+
+    --scrollbar-width: thin;
+    --scrollbar-color: color-mix(in srgb, transparent, white 50%) transparent;
+
+    --editor-tab-size: 4ch;
+    --editor-text-size: 14px;
+    --editor-text-height: 1.4em;
+    --editor-text-family: "JetBrains Mono", monospace;
+    --editor-text-weight: 400;
+    --editor-text-color: white;
+    --editor-bg-color: #161616;
+
+    scrollbar-width: var(--scrollbar-width);
+    scrollbar-color: var(--scrollbar-color);
+    font-family: var(--text-family);
+    font-size: var(--text-size);
+    color: var(--text-color);
+    background-color: var(--bg-color);
+}
+
+:where(html, body) {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
+}
+
+nav {
+    justify-content: space-between;
+    padding: var(--padding);
+    padding-left: calc(var(--padding) * 2);
+    padding-right: calc(var(--padding) * 2);
+    box-sizing: border-box;
+    height: 8vh;
+    flex-shrink: 0;
+
+    display: flex;
+    align-items: center;
+
+    font-size: 30px;
+    font-weight: 500;
+}
+
+main {
+    height: 92vh;
+    flex-grow: 0;
+    background-color: var(--editor-bg-color);
+}
+
 ui-window {
-    gap: 10px;
-    height: 100%;
+    --slider-width: 5px;
+    --output-width: 35%;
+    --editor-width: calc(100% - var(--output-width));
+
+    --output-col: minmax(20%, var(--output-width));
+    --editor-col: minmax(20%, var(--editor-width));
+    --grid-columns: var(--editor-col) var(--output-col);
+
     display: grid;
-    grid-template-columns: auto 35%;
+    grid-template-columns: var(--grid-columns);
     grid-template-areas: "editor output";
+
+    height: 100%;
+    overflow: hidden;
+}
+
+.panel {
+    border: 1px solid var(--border-color);
+    height: 100%;
+    overflow: hidden;
+
+    display: flex;
+    flex-direction: column;
+
+    position: relative;
+    box-sizing: border-box;
+
+    header {
+        font-family: var(--text-family);
+        font-size: 18px;
+        width: 100%;
+        height: 3rem;
+        display: flex;
+        align-items: center;
+        padding: var(--padding);
+        box-sizing: border-box;
+        border-bottom: 1px solid var(--border-color);
+
+        select {
+            font-family: inherit;
+            font-size: inherit;
+            height: 100%;
+            width: 10rem;
+            outline: none;
+            background-color: var(--editor-bg-color);
+            color: var(--editor-text-color);
+            border: none;
+        }
+    }
+
+    :is(textarea, code) {
+        box-sizing: border-box;
+        white-space: pre;
+
+        line-height: var(--editor-text-height);
+        font-family: var(--editor-text-family);
+        font-size: var(--editor-text-size);
+        tab-size: var(--editor-tab-size);
+
+        color: var(--editor-text-color);
+    }
+
+    footer {
+        border-top: 1px solid var(--border-color);
+        box-sizing: border-box;
+        width: 100%;
+        display: flex;
+        align-items: center;
+
+        height: 2rem;
+        padding: var(--padding);
+
+        font-size: 14px;
+        background-color: var(--bg-color);
+    }
 }
 
 ui-editor {
-    padding: 10px;
+    grid-area: editor;
+    border-left: none !important;
 
-    textarea {
-        width: 100%;
+    .editor-content {
+        padding-top: var(--padding);
+        padding-right: var(--padding);
         height: 100%;
-        resize: none;
-        border: none;
-        outline: none;
-        padding: 0;
+        display: flex;
+        flex-direction: row;
+        background-color: var(--editor-bg-color);
+
+        .editor-lines {
+            line-height: var(--editor-text-height);
+            font-family: var(--editor-text-family);
+            font-size: var(--editor-text-size);
+            width: 4ch;
+            text-align: right;
+            user-select: none;
+            padding-right: 1em;
+            color: color-mix(in srgb, currentColor, transparent 60%);
+            flex-shrink: 0;
+        }
+
+        textarea {
+            background-color: inherit;
+
+            overflow: auto;
+            padding: 0;
+            outline: none;
+            border: none;
+            resize: none;
+
+            height: 100%;
+            width: 100%;
+        }
     }
 }
 
 ui-output {
-    code {
-        width: 100%;
+    grid-area: output;
+    border-right: none !important;
+
+    .output-content {
+        padding: var(--padding);
+        box-sizing: border-box;
         height: 100%;
+        overflow: auto;
+        background-color: var(--editor-bg-color);
+
+        code {
+            flex-grow: 1;
+            white-space: pre;
+            display: block;
+
+            height: 100%;
+            width: 100%;
+        }
+    }
+
+    footer {
+        justify-content: right;
+    }
+
+    footer ui-stats {
+        position: relative;
+        justify-content: right;
+        display: flex;
+        flex-direction: row;
+        width: 40%;
+        gap: 10px;
+
+        div {
+            position: relative;
+            padding: 4px;
+            border-radius: 2px;
+            background-color: var(--editor-bg-color);
+
+            .tooltip {
+                width: 300%;
+                position: absolute;
+                text-align: center;
+                z-index: 1;
+                bottom: 150%;
+                left: -8%;
+                transform: translateX(-50%);
+
+                visibility: hidden;
+                opacity: 0;
+                transition: opacity 0.3s;
+            }
+        }
+
+        div:hover {
+            .tooltip {
+                visibility: visible;
+                opacity: 1;
+            }
+        }
     }
 }
 
-:is(html, body) {
-    margin: 0;
-    padding: 0;
-    width: 100vw;
-    height: 100vh;
+:any-link {
+    color: inherit;
+    text-decoration: none;
+}
 
-    background-color: black;
+:any-link:hover {
+    color: color-mix(in srgb, currentColor, black 40%);
 }
