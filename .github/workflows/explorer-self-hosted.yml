@@ -2,7 +2,7 @@ on:
   push:
     branches:
       - main
-      
+
   pull_request:
     branches:
       - main
@@ -19,5 +19,14 @@ jobs:
         run: cd neo_explorer
 
       - name: Run Zig Build
-        run: zig build run -Doptimize=ReleaseFast -- --port=6969 --addr=0.0.0.0
+        run: zig build -Doptimize=ReleaseFast
         working-directory: neo_explorer
+
+      - name: Start the Server
+        run: ./zig-out/bin/neo_explorer --port=6969 --addr=0.0.0.0 &
+
+      - name: Confirm Server is Running
+        run: |
+          echo "Waiting for the server to start..."
+          sleep 10
+          curl -f http://localhost:6969 || { echo "Server failed to start"; exit 1; }
