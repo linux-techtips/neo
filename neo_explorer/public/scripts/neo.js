@@ -17,7 +17,7 @@ const bigIntToSlice = function (bigInt) {
 export const libneo = {
   encoder: new TextEncoder("utf-8"),
   decoder: new TextDecoder("utf-8"),
-  exports: module?.instance.exports,
+  exports: module.instance.exports,
   memory,
 
   token_name: function (tag) {
@@ -30,6 +30,10 @@ export const libneo = {
 
   tokenize: function ({ ptr, len }) {
     return bigIntToSlice(this.exports.Neo_Tokenize(ptr, len));
+  },
+
+  parse: function ({ ptr, len }) {
+    return bigIntToSlice(this.exports.Neo_Parse(ptr, len));
   },
 
   source_alloc: function (text) {
@@ -74,11 +78,20 @@ export const Neo = class {
   }
 
   emit(text, mode) {
-    const output = !text ? "" : this.handleEmit(text, mode);
-    this.emitListeners.forEach((listener) => listener(output));
+    const start = performance.now();
+    const { output, len, byteSize } = this.handleEmit(text, mode);
+    const end = performance.now();
+
+    const ratio = (len * byteSize) / (!text ? 1 : text.length);
+    const time = end - start;
+    const stats = { ratio, time, len };
+
+    this.emitListeners.forEach((listener) => listener(output, stats));
   }
 
   handleEmit(text, mode) {
+    if (!text) return { output: "", len: 0, byteSize: 0 };
+
     let source = libneo.source_alloc(text);
     let tokens = null;
     let tree = null;
@@ -90,21 +103,22 @@ export const Neo = class {
           const buffer = new Uint8Array(
             libneo.memory.buffer,
             tokens.ptr,
-            tokens.len,
+            tokens.len * 2,
           );
 
-          return renderTokens(buffer);
+          return this.renderTokens(buffer);
         }
         case "parse": {
           tokens = libneo.tokenize(source);
           tree = libneo.parse(tokens);
+
           const buffer = new Uint8Array(
             libneo.memory.buffer,
             tree.ptr,
-            tree.len,
+            tree.len * 2,
           );
 
-          return renderTokens(buffer);
+          return this.renderTree(buffer);
         }
         default: {
           throw new Error(`Invalid mode: ${mode}`);
@@ -118,41 +132,58 @@ export const Neo = class {
   }
 
   renderToken({ tag, len }) {
-    return `.{ .tag = ${tag}, .len = ${len} }`;
+    return `<div class="line">.{ .tag = "${libneo.token_name(tag)}", .len = ${len} }</div>`;
   }
 
   renderTokens(buffer) {
+    let tokenLen = 0;
     let output = "";
+
     for (let i = 0; i < buffer.length; i += 2) {
       const tag = buffer[i];
+      tokenLen += 1;
 
       let len = buffer[i + 1];
       if (len === 0) {
-        const upper = buffer[i + 2];
-        const lower = buffer[i + 3];
+        const upper = buffer[i + 3];
+        const lower = buffer[i + 2];
 
         len = (upper << 8) | lower;
+        tokenLen += 1;
         i += 2;
       }
 
       output += this.renderToken({ tag, len });
+
+      if (tag === 128) break;
     }
+
+    return { output, len: tokenLen, byteSize: 2 };
   }
 
   renderTree(buffer) {
+    let nodeLen = 0;
     let output = "";
-    for (let i = buffer.length; i > 0; i -= 2) {
-      const tag = buffer[i];
 
-      let len = buffer[i - 1];
+    for (let i = buffer.length - 1; i >= 0; i -= 2) {
+      const tag = buffer[i - 1];
+      nodeLen += 1;
+
+      let len = buffer[i];
       if (len === 0) {
         const upper = buffer[i - 2];
         const lower = buffer[i - 3];
 
         len = (upper << 8) | lower;
+        nodeLen += 1;
+        i -= 2;
       }
 
       output += this.renderToken({ tag, len });
+
+      if (tag === 128) break;
     }
+
+    return { output, len: nodeLen, byteSize: 2 };
   }
 };

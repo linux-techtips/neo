@@ -4,17 +4,61 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Neo Explorer</title>
-        <link rel="stylesheet" href="index.css" />
-        <script src="index.js"></script>
+        <link rel="stylesheet" href="./index.css" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300..700&display=swap"
+            rel="stylesheet"
+        />
+        <script type="module" src="./index.js"></script>
     </head>
     <body>
-        <ui-window>
-            <ui-editor id="panel">
-                <textarea spellcheck="false" autofocus></textarea>
-            </ui-editor>
-            <ui-output id="panel">
-                <code></code>
-            </ui-output>
-        </ui-window>
+        <nav>
+            <span>neo explorer</span>
+            <a
+                href="https://github.com/linux-techtips/neo"
+                data-icon-size="big"
+                data-icon="github"
+                target="_blank"
+            ></a>
+        </nav>
+        <main>
+            <ui-window>
+                <ui-editor class="panel">
+                    <div class="editor-content">
+                        <div class="editor-lines"></div>
+                        <textarea spellcheck="false"></textarea>
+                    </div>
+                </ui-editor>
+                <ui-output class="panel">
+                    <header>
+                        <select>
+                            <option value="tokenize">Tokenize</option>
+                            <option value="parse">Parse</option>
+                        </select>
+                    </header>
+                    <div class="output-content">
+                        <code></code>
+                    </div>
+                    <footer>
+                        <ui-stats>
+                            <div>
+                                <span class="stat-ratio"> 0% </span>
+                                <span class="tooltip">Compression Ratio</span>
+                            </div>
+                            <div>
+                                <span class="stat-time">0ms</span>
+                                <span class="tooltip">Compilation Time</span>
+                            </div>
+                            <div>
+                                <span class="stat-len">0</span>
+                                <span class="tooltip">Fragments</span>
+                            </div>
+                        </ui-stats>
+                    </footer>
+                </ui-output>
+            </ui-window>
+        </main>
     </body>
 </html>
