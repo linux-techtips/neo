@@ -4,7 +4,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>Neo Explorer</title>
-        <link rel="stylesheet" href="./index.css" />
+        <link rel="stylesheet" href="./styles.css" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
@@ -13,7 +13,7 @@
             as="style"
             onload="this.onload=null;this.rel='stylesheet'"
         />
-        <script type="module" src="./index.js"></script>
+        <script type="module" src="./app.js"></script>
     </head>
     <body>
         <nav>
@@ -31,7 +31,10 @@
                 <ui-editor class="panel">
                     <div class="editor-content">
                         <div class="editor-lines"></div>
-                        <textarea aria-label="editor input" spellcheck="false"></textarea>
+                        <textarea
+                            aria-label="editor input"
+                            spellcheck="false"
+                        ></textarea>
                     </div>
                 </ui-editor>
                 <ui-output class="panel">

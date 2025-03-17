@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) !void {
 
     // TODO: Yet another bun feature I cannot use because it is undercooked.
     // https://github.com/oven-sh/bun/issues/16335
-    const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "./public/neo.wasm", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
+    const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "./public/neo.wasm", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]", "--asset-naming=[name].[ext]" });
     // Thank you random ass undocumented stupid build flag that no one ever talks about that actually makes the build command run.
     bundle_cmd.has_side_effects = true;
     _ = bundle_cmd.captureStdOut();
