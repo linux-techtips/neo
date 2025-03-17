@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
 
     const neo_lib_artifact = neo_lib_dep.artifact("neo");
     const neo_lib_install = b.addInstallArtifact(neo_lib_artifact, .{
-        .dest_dir = .{ .override = .{ .custom = "bundle" } },
+        .dest_dir = .{ .override = .{ .custom = "../public" } },
     });
 
     neo_explorer.step.dependOn(&neo_lib_install.step);
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) !void {
 
     // TODO: Yet another bun feature I cannot use because it is undercooked.
     // https://github.com/oven-sh/bun/issues/16335
-    const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
+    const bundle_cmd = b.addSystemCommand(&.{ "bun", "build", "./public/index.html", "./public/neo.wasm", "--outdir=zig-out/bundle", "--chunk-naming=[name].[ext]" });
     // Thank you random ass undocumented stupid build flag that no one ever talks about that actually makes the build command run.
     bundle_cmd.has_side_effects = true;
     _ = bundle_cmd.captureStdOut();
