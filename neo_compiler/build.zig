@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = root_path,
         .optimize = optimize,
         .target = target,
-        .name = "neo-compiler",
+        .name = "neo",
     });
 
     const neo_lib_dep = b.dependency("neo_lib", .{
