@@ -31,6 +31,23 @@ const Mode = enum {
     parse,
 };
 
+fn renderTokens(neo_tokens: Neo_Tokens) !void {
+    const tokens = neo_tokens.ptr[0..neo_tokens.len];
+    for (tokens) |token| {
+        std.debug.print("{s}\n", .{Neo_Token_Name(token.tag)});
+        if (token.tag == 128) break;
+    }
+}
+
+fn renderTree(neo_parse_tree: Neo_Tokens) !void {
+    var i = neo_parse_tree.len - 1;
+    while (true) : (i -= 1) {
+        const token = neo_parse_tree.ptr[i];
+        std.debug.print("{s}\n", .{Neo_Token_Name(token.tag)});
+        if (token.tag == 128) break;
+    }
+}
+
 fn collect(allocator: std.mem.Allocator, args: std.process.ArgIterator) ![]u8 {
     var len: usize = 0;
     var lenIt = args;
@@ -86,4 +103,19 @@ pub fn main() !void {
 
     const source = Neo_Source_Alloc(text.?.ptr, text.?.len);
     defer Neo_Source_Free(source);
+
+    var tokens: Neo_Tokens = undefined;
+    var parseTree: Neo_Tokens = undefined;
+
+    switch (mode) {
+        .tokenize => {
+            tokens = Neo_Tokenize(source);
+            try renderTokens(tokens);
+        },
+        .parse => {
+            tokens = Neo_Tokenize(source);
+            parseTree = Neo_Parse(tokens);
+            try renderTree(parseTree);
+        },
+    }
 }

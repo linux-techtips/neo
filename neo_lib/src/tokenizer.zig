@@ -326,9 +326,21 @@ pub const Token = extern struct {
         newline = 128 | @as(u8, 8),
         comment = 128 | @as(u8, 9),
     };
+
+    pub fn isOperator(self: Token) bool {
+        return switch (operators.classify(self)) {
+            .binary, .unary_prefix, .unary_postfix => true,
+            else => false,
+        };
+    }
+
+    pub fn isOperand(self: Token) bool {
+        return operators.classify(self) == .operand;
+    }
 };
 
 pub const operators = @import("tokenizer/operators.zig");
 pub const keywords = @import("tokenizer/keywords.zig");
 pub const symbols = @import("tokenizer/symbols.zig");
+
 pub const tokenize = Tokenizer.tokenize;
