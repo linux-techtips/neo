@@ -22,8 +22,8 @@ const Tokenizer = struct {
     tokens: []Token = undefined,
     tokenCount: usize = 0,
 
-    begin: u32 = 0,
-    index: u32 = 0,
+    begin: Token.Index = 0,
+    index: Token.Index = 0,
 
     pub fn tokenize(allocator: std.mem.Allocator, source: Source) ![]Token {
         var self = Tokenizer{ .text = source.text() };
@@ -264,6 +264,8 @@ const Tokenizer = struct {
 pub const Token = extern struct {
     tag: Tag,
     len: u8,
+
+    pub const Index = u32;
 
     pub const Tag = blk: {
         const kinds_fields = std.meta.fields(Kinds);

@@ -51,7 +51,12 @@ export const libneo = {
   },
 
   alloc: function (len) {
-    return { ptr: this.exports.Neo_Alloc(len), len };
+    const mem = this.exports.Neo_Alloc(len);
+    const slice = bigIntToSlice(mem);
+
+    console.debug(slice);
+
+    return slice;
   },
 
   free: function ({ ptr, len }) {

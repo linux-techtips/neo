@@ -10,9 +10,21 @@ const Token = tokenizer.Token;
 const Wasm = struct {
     const allocator = std.heap.wasm_allocator;
 
+    const Slice = packed struct {
+        ptr: u32,
+        len: u32,
+
+        pub fn pack(slice: anytype) u64 {
+            return @bitCast(Slice{
+                .ptr = @intFromPtr(slice.ptr),
+                .len = slice.len,
+            });
+        }
+    };
+
     fn Neo_Alloc(len: usize) callconv(.C) u64 {
         const slice = allocator.alloc(u8, len) catch unreachable;
-        return @bitCast(slice);
+        return Slice.pack(slice);
     }
 
     fn Neo_Free(ptr: [*]const u8, len: usize) callconv(.C) void {
@@ -21,7 +33,7 @@ const Wasm = struct {
 
     fn Neo_Source_Alloc(text_ptr: [*]const u8, text_len: u32) callconv(.C) u64 {
         const source = Source.fromText(allocator, text_ptr[0..text_len :0]) catch unreachable;
-        return @bitCast(source.buffer);
+        return Slice.pack(source.buffer);
     }
 
     fn Neo_Source_Free(source_ptr: [*]const u8, source_len: u32) callconv(.C) void {
@@ -32,18 +44,18 @@ const Wasm = struct {
         const source = Source.fromRawBuffer(source_ptr, source_len);
         const tokens = tokenizer.tokenize(allocator, source) catch unreachable;
 
-        return @bitCast(tokens);
+        return Slice.pack(tokens);
     }
 
     fn Neo_Parse(tokens_ptr: [*]const Token, tokens_len: u32) callconv(.C) u64 {
         const tokens = tokens_ptr[0..tokens_len];
         const parseTree = parser.parse(allocator, tokens) catch unreachable;
 
-        return @bitCast(parseTree);
+        return Slice.pack(parseTree);
     }
 
     fn Neo_Token_Name(tag: Token.Tag) callconv(.C) u64 {
-        return @bitCast(@tagName(tag));
+        return Slice.pack(@tagName(tag));
     }
 };
 
