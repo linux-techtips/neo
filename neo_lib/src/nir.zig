@@ -1,261 +1,320 @@
-const tokenizer = @import("tokenizer.zig");
-const operators = tokenizer.operators;
-const parser = @import("parser.zig");
+// TODO: (carter) This whole thing is going to be refactored don't pay attention to how unoptimal this is.
+
 const std = @import("std");
 
-const Allocator = std.mem.Allocator;
-const Source = @import("Source.zig");
-const Token = tokenizer.Token;
+pub const Error = Allocator.Error;
 
-pub const Error = Allocator.Error || error{};
+const Allocator = std.mem.Allocator;
 
 pub const Inst = struct {
-    token: Token,
-    data: Data,
     tag: Tag,
+    data: Data,
 
     pub const Index = u32;
 
-    pub const Data = union {
-        decl: struct {
-            name: []const u8,
-            expr: Index,
-        },
-        bin: struct {
-            lhs: Index,
-            rhs: Index,
-        },
-        int: u64,
+    pub const Key = enum(u32) {
+        const index_start = @intFromEnum(Key.type_u64);
+
+        type_s32,
+        type_s64,
+        type_u32,
+        type_u64,
+
+        none = std.math.maxInt(u32),
+
+        _,
+
+        pub fn lookup(slice: []const u8) ?Key {
+            const map = std.StaticStringMap(Key).initComptime(.{
+                .{ "s32", .type_s32 },
+                .{ "s64", .type_s64 },
+                .{ "u32", .type_u32 },
+                .{ "u64", .type_u64 },
+            });
+
+            return map.get(slice);
+        }
+
+        pub fn fromIndex(index: Index) Key {
+            return @enumFromInt(index + index_start);
+        }
+
+        pub fn toIndexUnchecked(key: Key) Index {
+            return @intFromEnum(key) - index_start;
+        }
+
+        pub fn toIndexChecked(key: Key) ?Index {
+            const val = Key.toIndexUnchecked(key);
+            return if (val > index_start or key == .none) null else val;
+        }
     };
 
-    const Tag = enum(u8) {
+    pub const Tag = enum {
+        block,
+        param,
+        local,
+        func,
         decl,
+        call,
+        int,
         add,
         sub,
         mul,
         div,
-        int,
+    };
+
+    pub const Data = union {
+        block: Block,
+        local: Local,
+        param: Param,
+        decl: Decl,
+        func: Func,
+        call: Call,
+        int: u64,
+        bin: Bin,
+
+        pub const Func = struct {
+            params: Index,
+            ret_ty: Key,
+        };
+
+        pub const Call = struct {
+            name: []const u8,
+            vals: Index,
+        };
+
+        pub const Block = struct {
+            end: u32,
+        };
+
+        pub const Local = struct {
+            name: []const u8,
+        };
+
+        pub const Param = struct {
+            name: []const u8,
+            type: Key,
+        };
+
+        pub const Decl = struct {
+            name: []const u8,
+            type: Key,
+            expr: Index,
+        };
+
+        pub const Bin = struct {
+            lhs: Index,
+            rhs: Index,
+        };
     };
 };
 
-pub const Module = struct {
-    code: std.MultiArrayList(Inst),
+pub const Code = struct {
+    data: std.ArrayListUnmanaged(Inst),
 
-    pub const Code = std.MultiArrayList(Inst).Slice;
-    pub const new = Module{ .code = .empty };
+    pub const new = Code{ .data = .empty };
 
-    pub fn deinit(self: *Module, allocator: Allocator) void {
-        self.code.deinit(allocator);
+    pub fn addInst(code: *Code, gpa: Allocator, inst: Inst) Error!Inst.Index {
+        try code.data.append(gpa, inst);
+
+        return @intCast(code.data.items.len - 1);
     }
 
-    pub fn addInst(self: *Module, allocator: Allocator, inst: Inst) Error!Inst.Index {
-        try self.code.append(allocator, inst);
-
-        return @intCast(self.code.len - 1);
-    }
-
-    pub fn getDataRef(self: *Module, index: Inst.Index) *Inst.Data {
-        return &self.code.items(.data)[index];
-    }
-};
-
-pub const Generator = struct {
-    allocator: Allocator,
-    tokens: []const Token,
-    source: [:0]const u8,
-
-    module: Module = .new,
-
-    const Stack = std.ArrayListUnmanaged(Context);
-
-    const Context = struct {
-        inst: Inst.Index = undefined,
-        tokens_idx: u32,
-        source_idx: u32,
-    };
-
-    pub fn generate(allocator: Allocator, source: Source, tokens: []const Token) Error!Module {
-        var generator = Generator{ .allocator = allocator, .source = source.text(), .tokens = tokens };
-        _ = try generator.genToplevel(.{ .tokens_idx = @intCast(tokens.len - 1), .source_idx = 0 });
-
-        return generator.module;
-    }
-
-    fn genToplevel(self: *Generator, ctx: Context) Error!Context {
-        const token = self.tokens[ctx.tokens_idx];
-
-        if (token.tag == .@":") return try self.genVarDecl(ctx);
-        if (token.isOperator()) return try self.genBinOp(ctx);
-
-        std.debug.panic("Expected a toplevel expression but found: `{s}` instead.", .{@tagName(token.tag)});
-    }
-
-    fn genBinOp(self: *Generator, ctx: Context) Error!Context {
-        const token = self.tokens[ctx.tokens_idx];
-        const tag: Inst.Tag = switch (token.tag) {
-            .@"+" => .add,
-            .@"-" => .sub,
-            .@"*" => .mul,
-            .@"/" => .div,
-            else => |tag| std.debug.panic("Invalid Binary Operator: {s}", .{@tagName(tag)}),
-        };
-
-        const inst = try self.module.addInst(self.allocator, .{
-            .tag = tag,
-            .token = token,
-            .data = undefined,
-        });
-
-        const lhs = try self.genOperand(.{
-            .tokens_idx = ctx.tokens_idx - 1,
-            .source_idx = ctx.source_idx,
-        });
-
-        const rhs = try self.genOperandOrOperator(.{
-            .tokens_idx = lhs.tokens_idx,
-            .source_idx = self.skipWhitespace(lhs.source_idx + token.len),
-        });
-
-        self.module.getDataRef(inst).* = .{
-            .bin = .{ .lhs = lhs.inst, .rhs = rhs.inst },
-        };
-
-        return .{
-            .inst = inst,
-            .tokens_idx = rhs.tokens_idx,
-            .source_idx = self.skipWhitespace(rhs.source_idx),
-        };
-    }
-
-    fn genOperand(self: *Generator, ctx: Context) Error!Context {
-        const token = self.tokens[ctx.tokens_idx];
-        const slice = self.source[ctx.source_idx..][0..token.len];
-
-        const inst = try self.module.addInst(self.allocator, .{
-            .tag = .int,
-            .token = token,
-            .data = .{ .int = std.fmt.parseInt(u64, slice, 10) catch unreachable },
-        });
-
-        return .{ .inst = inst, .tokens_idx = ctx.tokens_idx - 1, .source_idx = self.skipWhitespace(ctx.source_idx + token.len) };
-    }
-
-    fn genOperandOrOperator(self: *Generator, ctx: Context) Error!Context {
-        const token = self.tokens[ctx.tokens_idx];
-
-        if (token.isOperand()) return try self.genOperand(ctx);
-        if (token.isOperator()) return try self.genBinOp(ctx);
-
-        @panic("Expected to generate an operand or operator");
-    }
-
-    fn genVarDecl(self: *Generator, ctx: Context) Error!Context {
-        // Tokens :, name, :, type, expr
-        // Source name, :, type, :, expr
-
-        const inst = try self.module.addInst(self.allocator, .{
-            .tag = .decl,
-            .token = self.tokens[ctx.tokens_idx],
-            .data = undefined,
-        });
-
-        const name = try self.parseIdent(.{
-            .source_idx = ctx.source_idx,
-            .tokens_idx = ctx.tokens_idx - 1, // Skip the ':' token.
-        });
-
-        const ty = try self.parseIdent(.{
-            .source_idx = self.skipWhitespace(name.source_idx + 1), // Skip the ':' source.
-            .tokens_idx = name.tokens_idx - 1, // Skip the ':' token.
-        });
-
-        const expr = try self.genBinOp(.{
-            .source_idx = self.skipWhitespace(ty.source_idx + 1), // Skip the ':' source.
-            .tokens_idx = ty.tokens_idx,
-        });
-
-        self.module.getDataRef(inst).decl = .{
-            .name = self.source[ctx.source_idx..self.tokens[name.tokens_idx + 1].len],
-            .expr = expr.inst,
-        };
-
-        return .{
-            .inst = inst,
-            .source_idx = expr.source_idx,
-            .tokens_idx = expr.tokens_idx,
-        };
-    }
-
-    fn parseIdent(self: *Generator, ctx: Context) Error!Context {
-        const token = self.tokens[ctx.tokens_idx];
-        const slice = self.source[ctx.source_idx..][0..token.len];
-
-        if (token.tag != .ident) std.debug.print("Expected an ident but found: `{s} - {s}` instead.", .{ @tagName(token.tag), slice });
-
-        return .{
-            .source_idx = self.skipWhitespace(ctx.source_idx + token.len),
-            .tokens_idx = ctx.tokens_idx - 1,
-        };
-    }
-
-    fn skipWhitespace(self: *Generator, offset: u32) u32 {
-        var i = offset;
-        while (i < self.source.len and self.source[i] == ' ') : (i += 1) {}
-        return i;
+    pub fn getInstRef(code: *Code, index: Inst.Index) *Inst {
+        return &code.data.items[index];
     }
 };
 
 const Evaluator = struct {
-    code: Module.Code,
+    locals: std.StringHashMap(Inst.Index),
+    code: *Code,
 
-    pub fn evaluate(module: Module) u64 {
-        var evaluator = Evaluator{ .code = module.code.slice() };
-        return evaluator.evalExpr(0);
+    const Context = struct {
+        index: Inst.Index,
+        value: u64,
+    };
+
+    pub fn evaluate(gpa: Allocator, code: *Code) Error!u64 {
+        var eval = Evaluator{
+            .locals = std.StringHashMap(Inst.Index).init(gpa),
+            .code = code,
+        };
+
+        defer eval.locals.deinit();
+
+        const inst = code.getInstRef(0);
+        std.debug.assert(inst.tag == .block);
+
+        return (try eval.evalBlock(inst, 0)).value;
     }
 
-    fn evalExpr(self: *Evaluator, index: Inst.Index) u64 {
-        const inst = self.code.get(index);
+    fn evalExpr(eval: *Evaluator, index: Inst.Index) Error!Context {
+        const inst = eval.code.getInstRef(index);
         return switch (inst.tag) {
-            .add, .sub, .mul, .div => |tag| {
-                const lhs = self.evalExpr(inst.data.bin.lhs);
-                const rhs = self.evalExpr(inst.data.bin.rhs);
+            .add, .sub, .mul, .div => try eval.evalOperator(inst),
+            .decl => try eval.evalVarDecl(inst, index),
+            .block => try eval.evalBlock(inst, index),
+            .local => {
+                const local = eval.locals.get(inst.data.local.name) orelse
+                    std.debug.panic("Attempted to access the value of undefined local: {s}", .{inst.data.local.name});
 
-                return Evaluator.evalBinOp(tag, lhs, rhs);
+                return try eval.evalExpr(local);
             },
-            .decl => self.evalExpr(inst.data.decl.expr),
-            .int => inst.data.int,
+            .int => .{ .index = index + 1, .value = inst.data.int },
+            .call => {
+                const call = inst.data.call;
+                const decl = eval.code.getInstRef(eval.locals.get(inst.data.call.name) orelse
+                    std.debug.panic("Attempted to access the value of undefined function: {s}", .{call.name})).data.decl;
+
+                const func_type = Inst.Key.toIndexUnchecked(decl.type);
+                const func = eval.code.getInstRef(func_type).data.func;
+
+                const params = eval.code.getInstRef(func.params).data.block;
+
+                var i: Inst.Index = 1;
+                while (true) : (i += 1) {
+                    const params_idx = func.params + 1;
+                    const values_idx = call.vals + 1;
+
+                    const name = eval.code.getInstRef(params_idx).data.param.name;
+                    try eval.locals.put(name, values_idx);
+
+                    if (params_idx >= params.end) break;
+                }
+
+                return try eval.evalExpr(decl.expr);
+            },
+            else => |tag| std.debug.panic("Attempted to evaluate an un-evaluatable instruction: {s}", .{@tagName(tag)}),
         };
     }
 
-    fn evalBinOp(tag: Inst.Tag, lhs: u64, rhs: u64) u64 {
-        return switch (tag) {
-            .add => lhs +% rhs,
-            .sub => lhs -% rhs,
-            .mul => lhs *% rhs,
-            .div => lhs / rhs,
-            else => std.debug.panic("Not a binary operator: {s}", .{@tagName(tag)}),
+    fn evalBlock(eval: *Evaluator, inst: *const Inst, index: Inst.Index) Error!Context {
+        var ctx = Context{ .index = index + 1, .value = undefined };
+        while (ctx.index < inst.data.block.end) {
+            ctx = try eval.evalExpr(ctx.index);
+        }
+
+        return ctx;
+    }
+
+    fn evalOperator(eval: *Evaluator, inst: *const Inst) Error!Context {
+        const lhs = try eval.evalExpr(inst.data.bin.lhs);
+        const rhs = try eval.evalExpr(inst.data.bin.rhs);
+
+        const value = switch (inst.tag) {
+            .add => lhs.value +% rhs.value,
+            .sub => lhs.value -% rhs.value,
+            .mul => lhs.value *% rhs.value,
+            .div => lhs.value / rhs.value,
+            else => unreachable,
         };
+
+        return .{ .index = rhs.index, .value = value };
+    }
+
+    fn evalVarDecl(eval: *Evaluator, inst: *const Inst, index: Inst.Index) Error!Context {
+        const decl = inst.data.decl;
+        try eval.locals.put(decl.name, index);
+
+        switch (decl.type) {
+            .type_s32, .type_s64, .type_u32, .type_u64 => {
+                return try eval.evalExpr(inst.data.decl.expr);
+            },
+            else => { // Function decl.
+                // Just skip past the function body.
+                const expr = eval.code.getInstRef(decl.expr);
+                std.debug.assert(expr.tag == .block);
+
+                // We need to skip past the type instruction. Ugh.
+                return .{ .value = undefined, .index = expr.data.block.end + 1 };
+            },
+        }
     }
 };
 
-test "generate" {
+pub const evaluate = Evaluator.evaluate;
+
+test "code" {
     const allocator = std.testing.allocator;
 
-    const source = try Source.fromText(allocator, "x : u32 : 5 - 2 * 2");
-    defer source.deinit(allocator);
+    var code = Code.new;
+    defer code.data.deinit(allocator);
 
-    const tokens = try tokenizer.tokenize(allocator, source);
-    defer allocator.free(tokens);
+    const block = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
 
-    const tree = try parser.parse(allocator, tokens);
-    defer allocator.free(tree);
+    const decl = try code.addInst(allocator, .{
+        .tag = .decl,
+        .data = .{ .decl = .{ .name = "square", .type = undefined, .expr = undefined } },
+    });
 
-    var module = try generate(allocator, source, tree);
-    defer module.deinit(allocator);
+    const func = try code.addInst(allocator, .{
+        .tag = .func,
+        .data = .{ .func = .{ .params = undefined, .ret_ty = .type_u32 } },
+    });
 
-    const result = evaluate(module);
-    std.debug.print("{}\n", .{result});
+    code.getInstRef(decl).data.decl.type = Inst.Key.fromIndex(func);
+
+    const params = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
+
+    code.getInstRef(func).data.func.params = params;
+
+    const param = try code.addInst(allocator, .{
+        .tag = .param,
+        .data = .{ .param = .{ .name = "x", .type = .type_s32 } },
+    });
+
+    code.getInstRef(params).data.block.end = param;
+
+    const body = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
+
+    code.getInstRef(decl).data.decl.expr = body;
+
+    const op = try code.addInst(allocator, .{
+        .tag = .mul,
+        .data = .{ .bin = undefined },
+    });
+
+    const lhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "x" } },
+    });
+
+    const rhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "x" } },
+    });
+
+    code.getInstRef(op).data.bin = .{ .lhs = lhs, .rhs = rhs };
+    code.getInstRef(body).data.block.end = rhs;
+
+    const call = try code.addInst(allocator, .{
+        .tag = .call,
+        .data = .{ .call = .{ .name = "square", .vals = undefined } },
+    });
+
+    const vals = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
+
+    code.getInstRef(call).data.call.vals = vals;
+
+    const x = try code.addInst(allocator, .{
+        .tag = .int,
+        .data = .{ .int = 8 },
+    });
+
+    code.getInstRef(vals).data.block.end = x;
+    code.getInstRef(block).data.block.end = x;
+
+    std.debug.print("{!}\n", .{evaluate(allocator, &code)});
 }
-
-pub const generate = Generator.generate;
-pub const evaluate = Evaluator.evaluate;
