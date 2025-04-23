@@ -13,27 +13,14 @@ pub const Inst = struct {
     pub const Index = u32;
 
     pub const Key = enum(u32) {
-        const index_start = @intFromEnum(Key.type_u64);
+        const index_start = @intFromEnum(Key.type_s64);
 
         type_s32,
         type_s64,
-        type_u32,
-        type_u64,
 
         none = std.math.maxInt(u32),
 
         _,
-
-        pub fn lookup(slice: []const u8) ?Key {
-            const map = std.StaticStringMap(Key).initComptime(.{
-                .{ "s32", .type_s32 },
-                .{ "s64", .type_s64 },
-                .{ "u32", .type_u32 },
-                .{ "u64", .type_u64 },
-            });
-
-            return map.get(slice);
-        }
 
         pub fn fromIndex(index: Index) Key {
             return @enumFromInt(index + index_start);
@@ -217,7 +204,7 @@ const Evaluator = struct {
         try eval.locals.put(decl.name, index);
 
         switch (decl.type) {
-            .type_s32, .type_s64, .type_u32, .type_u64 => {
+            .type_s32, .type_s64 => {
                 return try eval.evalExpr(inst.data.decl.expr);
             },
             else => { // Function decl.
@@ -233,88 +220,3 @@ const Evaluator = struct {
 };
 
 pub const evaluate = Evaluator.evaluate;
-
-test "code" {
-    const allocator = std.testing.allocator;
-
-    var code = Code.new;
-    defer code.data.deinit(allocator);
-
-    const block = try code.addInst(allocator, .{
-        .tag = .block,
-        .data = .{ .block = undefined },
-    });
-
-    const decl = try code.addInst(allocator, .{
-        .tag = .decl,
-        .data = .{ .decl = .{ .name = "square", .type = undefined, .expr = undefined } },
-    });
-
-    const func = try code.addInst(allocator, .{
-        .tag = .func,
-        .data = .{ .func = .{ .params = undefined, .ret_ty = .type_u32 } },
-    });
-
-    code.getInstRef(decl).data.decl.type = Inst.Key.fromIndex(func);
-
-    const params = try code.addInst(allocator, .{
-        .tag = .block,
-        .data = .{ .block = undefined },
-    });
-
-    code.getInstRef(func).data.func.params = params;
-
-    const param = try code.addInst(allocator, .{
-        .tag = .param,
-        .data = .{ .param = .{ .name = "x", .type = .type_s32 } },
-    });
-
-    code.getInstRef(params).data.block.end = param;
-
-    const body = try code.addInst(allocator, .{
-        .tag = .block,
-        .data = .{ .block = undefined },
-    });
-
-    code.getInstRef(decl).data.decl.expr = body;
-
-    const op = try code.addInst(allocator, .{
-        .tag = .mul,
-        .data = .{ .bin = undefined },
-    });
-
-    const lhs = try code.addInst(allocator, .{
-        .tag = .local,
-        .data = .{ .local = .{ .name = "x" } },
-    });
-
-    const rhs = try code.addInst(allocator, .{
-        .tag = .local,
-        .data = .{ .local = .{ .name = "x" } },
-    });
-
-    code.getInstRef(op).data.bin = .{ .lhs = lhs, .rhs = rhs };
-    code.getInstRef(body).data.block.end = rhs;
-
-    const call = try code.addInst(allocator, .{
-        .tag = .call,
-        .data = .{ .call = .{ .name = "square", .vals = undefined } },
-    });
-
-    const vals = try code.addInst(allocator, .{
-        .tag = .block,
-        .data = .{ .block = undefined },
-    });
-
-    code.getInstRef(call).data.call.vals = vals;
-
-    const x = try code.addInst(allocator, .{
-        .tag = .int,
-        .data = .{ .int = 8 },
-    });
-
-    code.getInstRef(vals).data.block.end = x;
-    code.getInstRef(block).data.block.end = x;
-
-    std.debug.print("{!}\n", .{evaluate(allocator, &code)});
-}
