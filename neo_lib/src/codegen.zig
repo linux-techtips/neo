@@ -20,9 +20,13 @@ pub const Wasm = struct {
     funcs: Buffer = .empty,
     exprs: Buffer = .empty,
 
+    locals: std.StringHashMapUnmanaged(u8) = .empty,
+    curr_opcode: u8 = 0,
+    curr_local: u8 = 0,
     curr_func: u8 = 0,
 
     pub fn deinit(gen: *Wasm) void {
+        gen.locals.deinit(gen.gpa);
         gen.exports.deinit(gen.gpa);
         gen.types.deinit(gen.gpa);
         gen.funcs.deinit(gen.gpa);
@@ -37,38 +41,96 @@ pub const Wasm = struct {
         };
     }
 
-    pub fn genExpr(gen: *Wasm, index: Inst.Index) Error!Inst.Index {
-        const inst = gen.code.getInstRef(index);
-
-        return switch (inst.tag) {
-            .decl => try gen.genDecl(inst),
-            .block => {
-                const block = inst.data.block;
-
-                var i = index;
-                while (i < block.end) {
-                    i = try gen.genExpr(i + 1);
-                }
-            },
+    pub fn toWasmOpcode(tag: Inst.Tag) wasm.Opcode {
+        return switch (tag) {
+            .add => wasm.Opcode.i32_add,
+            .sub => wasm.Opcode.i32_sub,
+            .mul => wasm.Opcode.i32_mul,
+            .div => wasm.Opcode.i32_div_s,
+            else => unreachable,
         };
     }
 
-    pub fn genFunc(gen: *Wasm, decl: Inst.Index, index: Inst.Index) Error!void {
-        const name = gen.code.getInstRef(decl).data.decl.name;
-        const func = gen.code.getInstRef(index).data.func;
-        const params = gen.code.getInstRef(func.params).data.block;
+    pub fn genExpr(gen: *Wasm, index: Inst.Index) Error!Inst.Index {
+        const inst = gen.code.getInstRef(index);
+        return switch (inst.tag) {
+            .decl => try gen.genDecl(index, &inst.data.decl),
+            .block => try gen.genBlock(index, &inst.data.block),
+            .add, .sub, .mul, .div => |tag| try gen.genBin(tag, &inst.data.bin),
+            .local => {
+                const local = inst.data.local;
+                const local_index = gen.locals.get(local.name) orelse @panic("invalid local");
 
-        const param_len = params.end - func.params;
+                try gen.exprs.append(gen.gpa, @intFromEnum(wasm.Opcode.local_get));
+                try gen.exprs.append(gen.gpa, local_index);
+
+                return index + 1;
+            },
+            else => |tag| std.debug.panic("Attempted to generate an expression for an invalid instruction tag: {s}", .{@tagName(tag)}),
+        };
+    }
+
+    pub fn genBin(gen: *Wasm, tag: Inst.Tag, bin: *const Inst.Data.Bin) Error!Inst.Index {
+        _ = try gen.genExpr(bin.lhs);
+        const next = try gen.genExpr(bin.rhs);
+
+        try gen.exprs.append(gen.gpa, @intFromEnum(Wasm.toWasmOpcode(tag)));
+
+        return next;
+    }
+
+    pub fn genDecl(gen: *Wasm, index: Inst.Index, decl: *const Inst.Data.Decl) Error!Inst.Index {
+        switch (decl.type) {
+            .type_s32, .type_s64 => {
+                try gen.locals.put(gen.gpa, decl.name, gen.curr_local);
+                gen.curr_local += 1;
+
+                return index + 1;
+            },
+            else => |key| {
+                // This prevents us from creating function declarations within function declarations.
+                // TODO(carter): Remove this restriction.
+                std.debug.assert(gen.curr_local == 0);
+
+                const func_index = Inst.Key.toIndexUnchecked(key);
+                const func = gen.code.getInstRef(func_index).data.func;
+
+                const next = try gen.genFunc(decl, &func);
+                gen.curr_local = 0;
+
+                return next;
+            },
+        }
+    }
+
+    pub fn genBlock(gen: *Wasm, index: Inst.Index, block: *const Inst.Data.Block) Error!Inst.Index {
+        const end = index + block.len;
+
+        var i = index + 1;
+        while (i < end) {
+            i = try gen.genExpr(i);
+        }
+
+        return i;
+    }
+
+    pub fn genFunc(gen: *Wasm, decl: *const Inst.Data.Decl, func: *const Inst.Data.Func) Error!Inst.Index {
+        const name = decl.name;
+        const params = gen.code.getInstRef(func.params).data.block;
 
         // Write function type header.
         try gen.types.append(gen.gpa, wasm.function_type);
         // Write number of function params.
-        try gen.types.append(gen.gpa, @intCast(param_len));
+        try gen.types.append(gen.gpa, @intCast(params.len));
 
-        for (func.params + 1..params.end + 1) |i| {
-            const param = gen.code.getInstRef(@intCast(i)).data.param;
+        for (1..params.len + 1) |i| {
+            const offset = func.params + i;
+            const param = gen.code.getInstRef(@intCast(offset)).data.param;
             // Write the type of param.
             try gen.types.append(gen.gpa, @intFromEnum(toWasmType(param.type)));
+
+            try gen.locals.put(gen.gpa, param.name, gen.curr_local);
+            gen.curr_local += 1;
         }
 
         // Write the number of return params.
@@ -83,12 +145,31 @@ pub const Wasm = struct {
         // Populate the func sections.
         try gen.funcs.append(gen.gpa, @intCast(gen.curr_func));
 
+        // Temporarily store the offset into the exprs buffer of where to store the length of the function body.
+        const len_idx = gen.exprs.items.len;
+        try gen.exprs.append(gen.gpa, std.math.maxInt(u8));
+
+        // Temporarily store the offset into the exprs buffer of where to store the local count.
+        const locals_idx = gen.exprs.items.len;
+        try gen.exprs.append(gen.gpa, std.math.maxInt(u8));
+
+        // Generate the function body.
+        const next = try gen.genExpr(decl.expr);
+
+        // End the function body.
+        try gen.exprs.append(gen.gpa, @intFromEnum(wasm.Opcode.end));
+
+        // Now that the length of the function body is the current length minus the length of the tmp placeholder.
+        gen.exprs.items[len_idx] = @intCast(gen.exprs.items.len - len_idx - 1);
+        // Now that we know how many locals we have, we can store it. Function parameters do not count.
+        gen.exprs.items[locals_idx] = @intCast(gen.curr_local - params.len);
+
         gen.curr_func += 1;
+
+        return next;
     }
 
-    pub fn dump(gen: *Wasm, file: std.fs.File) !void {
-        const writer = file.writer();
-
+    pub fn lower(gen: *Wasm, writer: std.io.AnyWriter) !void {
         // Write magic + version.
         _ = try writer.write(&wasm.magic ++ &wasm.version);
 
@@ -117,7 +198,16 @@ pub const Wasm = struct {
         // Write code section magic.
         _ = try writer.writeByte(@intFromEnum(wasm.Section.code));
         // Write all the code stuff.
-        _ = try writer.write(&[_]u8{ 9, 1, 7, 0, @intFromEnum(wasm.Opcode.local_get), 0, @intFromEnum(wasm.Opcode.local_get), 0, @intFromEnum(wasm.Opcode.i32_mul), @intFromEnum(wasm.Opcode.end) });
+        // _ = try writer.write(&[_]u8{ 9, 1, 7, 0, @intFromEnum(wasm.Opcode.local_get), 0, @intFromEnum(wasm.Opcode.local_get), 0, @intFromEnum(wasm.Opcode.i32_mul), @intFromEnum(wasm.Opcode.end) });
+
+        // Write the length of the code section.
+        _ = try writer.writeByte(@intCast(gen.exprs.items.len + 1));
+
+        // Write the number of functions in the code section.
+        _ = try writer.writeByte(gen.curr_func);
+
+        // Write the code section.
+        _ = try writer.write(gen.exprs.items);
     }
 };
 
@@ -129,6 +219,11 @@ pub fn main() !void {
 
     var code = Code.new;
     defer code.data.deinit(allocator);
+
+    const program = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
 
     const decl = try code.addInst(allocator, .{ .tag = .decl, .data = .{ .decl = .{
         .name = "square",
@@ -155,14 +250,89 @@ pub fn main() !void {
         .data = .{ .param = .{ .name = "x", .type = .type_s32 } },
     });
 
-    code.getInstRef(params).data.block.end = param;
+    code.getInstRef(params).data.block.len = param - params;
+
+    const expr = try code.addInst(allocator, .{
+        .tag = .mul,
+        .data = .{ .bin = undefined },
+    });
+
+    const lhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "x" } },
+    });
+
+    const rhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "x" } },
+    });
+
+    code.getInstRef(expr).data.bin = .{ .lhs = lhs, .rhs = rhs };
+    code.getInstRef(decl).data.decl.expr = expr;
+
+    const add_decl = try code.addInst(allocator, .{
+        .tag = .decl,
+        .data = .{ .decl = .{
+            .name = "add",
+            .type = undefined,
+            .expr = undefined,
+        } },
+    });
+
+    const add_func = try code.addInst(allocator, .{
+        .tag = .func,
+        .data = .{ .func = .{ .params = undefined, .ret_ty = .type_s32 } },
+    });
+
+    code.getInstRef(add_decl).data.decl.type = Inst.Key.fromIndex(add_func);
+
+    const add_params = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = undefined },
+    });
+
+    code.getInstRef(add_func).data.func.params = add_params;
+
+    _ = try code.addInst(allocator, .{
+        .tag = .param,
+        .data = .{ .param = .{ .name = "x", .type = .type_s32 } },
+    });
+
+    const add_param_y = try code.addInst(allocator, .{
+        .tag = .param,
+        .data = .{ .param = .{ .name = "y", .type = .type_s32 } },
+    });
+
+    code.getInstRef(add_params).data.block.len = add_param_y - add_params;
+
+    const add_expr = try code.addInst(allocator, .{
+        .tag = .add,
+        .data = .{ .bin = undefined },
+    });
+
+    const add_lhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "x" } },
+    });
+
+    const add_rhs = try code.addInst(allocator, .{
+        .tag = .local,
+        .data = .{ .local = .{ .name = "y" } },
+    });
+
+    code.getInstRef(add_expr).data.bin = .{ .lhs = add_lhs, .rhs = add_rhs };
+    code.getInstRef(add_decl).data.decl.expr = add_expr;
+    code.getInstRef(program).data.block.len = add_rhs - program;
 
     var gen = Wasm{ .gpa = allocator, .code = &code };
     defer gen.deinit();
 
-    try gen.genFunc(decl, func);
+    _ = try gen.genExpr(program);
 
     const file = std.io.getStdOut();
+    var buffer = std.io.bufferedWriter(file.writer());
+    const writer = buffer.writer();
 
-    try gen.dump(file);
+    try gen.lower(writer.any());
+    try buffer.flush();
 }

@@ -1,7 +1,8 @@
-const buffer = await Bun.file('test.wasm').arrayBuffer();
+const buffer = await Bun.file("math.wasm").arrayBuffer();
 
 const module = await WebAssembly.instantiate(buffer);
 
-const { square } = module.instance.exports;
+const { add, square } = module.instance.exports;
 
-console.log(square(2, 2));
+console.log("Add: ", add(34, 35));
+console.log("Square: ", square(2));

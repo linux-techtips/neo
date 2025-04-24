@@ -71,7 +71,7 @@ pub const Inst = struct {
         };
 
         pub const Block = struct {
-            end: u32,
+            len: u32,
         };
 
         pub const Local = struct {
@@ -177,7 +177,7 @@ const Evaluator = struct {
 
     fn evalBlock(eval: *Evaluator, inst: *const Inst, index: Inst.Index) Error!Context {
         var ctx = Context{ .index = index + 1, .value = undefined };
-        while (ctx.index < inst.data.block.end) {
+        while (ctx.index < index + inst.data.block.len) {
             ctx = try eval.evalExpr(ctx.index);
         }
 
