@@ -67,7 +67,7 @@ pub const Inst = struct {
 
         pub const Call = struct {
             name: []const u8,
-            vals: Index,
+            args: Index,
         };
 
         pub const Block = struct {

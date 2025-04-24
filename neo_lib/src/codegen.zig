@@ -21,6 +21,7 @@ pub const Wasm = struct {
     exprs: Buffer = .empty,
 
     locals: std.StringHashMapUnmanaged(u8) = .empty,
+
     curr_opcode: u8 = 0,
     curr_local: u8 = 0,
     curr_func: u8 = 0,
@@ -57,6 +58,14 @@ pub const Wasm = struct {
             .decl => try gen.genDecl(index, &inst.data.decl),
             .block => try gen.genBlock(index, &inst.data.block),
             .add, .sub, .mul, .div => |tag| try gen.genBin(tag, &inst.data.bin),
+            .call => try gen.genCall(index, &inst.data.call),
+            .int => {
+                const int = inst.data.int;
+                try gen.exprs.append(gen.gpa, @intFromEnum(wasm.Opcode.i32_const));
+                try gen.exprs.append(gen.gpa, @intCast(int));
+
+                return index + 1;
+            },
             .local => {
                 const local = inst.data.local;
                 const local_index = gen.locals.get(local.name) orelse @panic("invalid local");
@@ -68,6 +77,22 @@ pub const Wasm = struct {
             },
             else => |tag| std.debug.panic("Attempted to generate an expression for an invalid instruction tag: {s}", .{@tagName(tag)}),
         };
+    }
+
+    pub fn genCall(gen: *Wasm, _: Inst.Index, call: *const Inst.Data.Call) Error!Inst.Index {
+        const args = gen.code.getInstRef(call.args).data.block;
+        const end = call.args + args.len + 1;
+
+        var i = call.args + 1;
+        while (i < end) {
+            i = try gen.genExpr(i);
+        }
+
+        const func_index = gen.locals.get(call.name) orelse @panic("invalid function");
+        try gen.exprs.append(gen.gpa, @intFromEnum(wasm.Opcode.call));
+        try gen.exprs.append(gen.gpa, func_index);
+
+        return i;
     }
 
     pub fn genBin(gen: *Wasm, tag: Inst.Tag, bin: *const Inst.Data.Bin) Error!Inst.Index {
@@ -94,6 +119,10 @@ pub const Wasm = struct {
 
                 const func_index = Inst.Key.toIndexUnchecked(key);
                 const func = gen.code.getInstRef(func_index).data.func;
+
+                // Write the function to the locals table.
+                // TODO(carter): This is a hack.
+                try gen.locals.put(gen.gpa, decl.name, gen.curr_func);
 
                 const next = try gen.genFunc(decl, &func);
                 gen.curr_local = 0;
@@ -322,7 +351,49 @@ pub fn main() !void {
 
     code.getInstRef(add_expr).data.bin = .{ .lhs = add_lhs, .rhs = add_rhs };
     code.getInstRef(add_decl).data.decl.expr = add_expr;
-    code.getInstRef(program).data.block.len = add_rhs - program;
+
+    const foo_decl = try code.addInst(allocator, .{
+        .tag = .decl,
+        .data = .{ .decl = .{ .name = "foo", .type = undefined, .expr = undefined } },
+    });
+
+    const foo_func = try code.addInst(allocator, .{
+        .tag = .func,
+        .data = .{ .func = .{ .params = undefined, .ret_ty = .type_s32 } },
+    });
+
+    code.getInstRef(foo_decl).data.decl.type = Inst.Key.fromIndex(foo_func);
+
+    const foo_params = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = .{ .len = 0 } },
+    });
+
+    code.getInstRef(foo_func).data.func.params = foo_params;
+
+    const foo_expr = try code.addInst(allocator, .{ .tag = .call, .data = .{ .call = .{ .name = "add", .args = undefined } } });
+
+    code.getInstRef(foo_decl).data.decl.expr = foo_expr;
+
+    const foo_args = try code.addInst(allocator, .{
+        .tag = .block,
+        .data = .{ .block = .{ .len = undefined } },
+    });
+
+    code.getInstRef(foo_expr).data.call.args = foo_args;
+
+    _ = try code.addInst(allocator, .{
+        .tag = .int,
+        .data = .{ .int = 34 },
+    });
+
+    const foo_arg2 = try code.addInst(allocator, .{
+        .tag = .int,
+        .data = .{ .int = 35 },
+    });
+
+    code.getInstRef(foo_args).data.block.len = foo_arg2 - foo_args;
+    code.getInstRef(program).data.block.len = foo_arg2 - program;
 
     var gen = Wasm{ .gpa = allocator, .code = &code };
     defer gen.deinit();
