@@ -82,4 +82,7 @@ pub fn build(b: *std.Build) void {
 
     const run_tests = b.addRunArtifact(tests);
     test_step.dependOn(&run_tests.step);
+
+    const check_step = b.step("check", "Check the library");
+    check_step.dependOn(&neo_lib.step);
 }
